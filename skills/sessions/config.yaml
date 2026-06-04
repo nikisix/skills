@@ -1,0 +1,5 @@
+sessions_root: ~/code/sessions
+
+# Optional: map auto-detected git repo name → preferred project name
+# project_aliases:
+#   my-old-repo-name: my-preferred-name
