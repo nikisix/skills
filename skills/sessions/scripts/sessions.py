@@ -14,6 +14,10 @@ Usage:
   sessions.py detect-project       — print auto-detected project name and sessions dir
   sessions.py sessions-dir         — print the current sessions dir path
   sessions.py pending-path         — print the full path to .pending-turn.json
+  sessions.py list-projects        — list all projects in sessions root
+  sessions.py capture <proj> <name> <overview> — create session in <proj> with overview
+  sessions.py capture-path <proj> <name>       — return target path without creating file
+  sessions.py read-transcript [<session-id>]   — parse session JSONL into structured JSON
 """
 
 import json
@@ -188,9 +192,7 @@ def get_turn_count(session_path: Path) -> int:
 def scan_overviews(sessions_dir: Path) -> list:
     files = sorted(
         sessions_dir.glob("[0-9]*.md"),
-        key=lambda f: int(re.match(r"^(\d+)", f.name).group(1))
-        if re.match(r"^(\d+)", f.name)
-        else 0,
+        key=lambda f: int(m.group(1)) if (m := re.match(r"^(\d+)", f.name)) else 0,
     )
     results = []
     for f in files:
@@ -311,6 +313,136 @@ def run_stop_hook():
     print(json.dumps({}))
 
 
+def capture_path(project: str, name: str) -> Path:
+    """Return the path for the next session file in a project without creating it."""
+    config = load_config()
+    sessions_root_str = config.get("sessions_root", "~/code/sessions")
+    sessions_root = Path(sessions_root_str).expanduser()
+    sessions_dir = sessions_root / project
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    num = next_number(sessions_dir)
+    return sessions_dir / f"{num}-{name}.md"
+
+
+def read_transcript(session_id: str) -> dict:
+    """Parse ~/.claude/projects/*/*<session-id>.jsonl into a structured conversation."""
+    projects_dir = Path.home() / ".claude/projects"
+    jsonl_path = None
+    for proj_dir in projects_dir.iterdir():
+        if proj_dir.is_dir():
+            candidate = proj_dir / f"{session_id}.jsonl"
+            if candidate.exists():
+                jsonl_path = candidate
+                break
+
+    if not jsonl_path:
+        return {"error": f"No transcript found for session {session_id}"}
+
+    entries = []
+    with open(jsonl_path) as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+
+    title = next((e.get("aiTitle") for e in entries if e.get("type") == "ai-title"), None)
+
+    _SKIP_PREFIXES = (
+        "<local-command-caveat>",
+        "<command-name>",
+        "<local-command-stdout>",
+        "<system-reminder>",
+    )
+
+    turns = []
+    files_changed: dict[str, str] = {}
+
+    for e in entries:
+        if e.get("isSidechain"):
+            continue
+
+        if e.get("type") == "user" and not e.get("isMeta"):
+            content = e["message"]["content"]
+            if isinstance(content, str):
+                text = content
+            elif isinstance(content, list):
+                text = " ".join(p.get("text", "") for p in content if p.get("type") == "text")
+            else:
+                continue
+            text = text.strip()
+            if not text or any(text.startswith(p) for p in _SKIP_PREFIXES):
+                continue
+            turns.append({"role": "user", "text": text})
+
+        elif e.get("type") == "assistant":
+            content = e["message"].get("content", [])
+            text = " ".join(p.get("text", "") for p in content if p.get("type") == "text")
+            for block in content:
+                if block.get("type") == "tool_use":
+                    inp = block.get("input", {})
+                    tool = block.get("name", "")
+                    if tool == "Edit":
+                        files_changed[inp.get("file_path", "")] = "edited"
+                    elif tool == "Write":
+                        files_changed[inp.get("file_path", "")] = "created"
+                    elif tool == "Bash":
+                        cmd = inp.get("command", "")
+                        # crude: pick up explicit rm/mv
+                        if "rm " in cmd:
+                            files_changed["(bash rm)"] = "deleted"
+            if text.strip():
+                turns.append({"role": "assistant", "text": text.strip()})
+
+    files_changed.pop("", None)
+
+    return {
+        "session_id": session_id,
+        "title": title,
+        "turns": turns,
+        "files_changed": [{"path": k, "action": v} for k, v in files_changed.items()],
+    }
+
+
+def list_projects() -> list:
+    """List all projects in the sessions root."""
+    config = load_config()
+    sessions_root_str = config.get("sessions_root", "~/code/sessions")
+    sessions_root = Path(sessions_root_str).expanduser()
+
+    if not sessions_root.exists():
+        return []
+
+    projects = [d.name for d in sessions_root.iterdir() if d.is_dir()]
+    return sorted(projects)
+
+
+def capture_session(project: str, name: str, overview: str) -> Path:
+    """Create a new session in a specific project with overview from stdin."""
+    config = load_config()
+    sessions_root_str = config.get("sessions_root", "~/code/sessions")
+    sessions_root = Path(sessions_root_str).expanduser()
+    sessions_dir = sessions_root / project
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+
+    num = next_number(sessions_dir)
+    filename = f"{num}-{name}.md"
+    session_path = sessions_dir / filename
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    title = name.replace("-", " ").title()
+
+    session_path.write_text(
+        f"# {title}\n\n"
+        f"## Overview\n\n"
+        f"{overview}\n\n"
+        f"---\n\n"
+        f"*Captured: {now}*\n"
+    )
+    return session_path
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -396,6 +528,46 @@ def main():
 
     elif cmd == "stop-hook":
         run_stop_hook()
+
+    elif cmd == "read-transcript":
+        if len(sys.argv) < 3:
+            session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+            if not session_id:
+                print("Error: read-transcript requires a session-id argument or CLAUDE_CODE_SESSION_ID env var")
+                sys.exit(1)
+        else:
+            session_id = sys.argv[2]
+        result = read_transcript(session_id)
+        print(json.dumps(result, indent=2))
+
+    elif cmd == "capture-path":
+        if len(sys.argv) < 4:
+            print("Error: capture-path requires project and name")
+            sys.exit(1)
+        path = capture_path(sys.argv[2], sys.argv[3])
+        print(path)
+
+    elif cmd == "list-projects":
+        projects = list_projects()
+        if not projects:
+            print("No projects found.")
+        else:
+            for proj in projects:
+                print(proj)
+
+    elif cmd == "capture":
+        if len(sys.argv) < 5:
+            print("Error: capture requires project, name, and overview")
+            print("Usage: capture <proj> <name> <overview>")
+            sys.exit(1)
+        project = sys.argv[2]
+        name = sys.argv[3]
+        overview = " ".join(sys.argv[4:])
+        if not overview.strip():
+            print("Error: overview cannot be empty", file=sys.stderr)
+            sys.exit(1)
+        path = capture_session(project, name, overview.strip())
+        print(f"Captured: {path}")
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

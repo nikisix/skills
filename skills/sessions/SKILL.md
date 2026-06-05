@@ -1,14 +1,7 @@
 ---
-name: session-new
+name: sessions
 description: >
-  Manage Claude Code session notes in .claude/sessions/. Use whenever the user
-  types /session-new (start), /session-end (end), /session-switch (switch),
-  /session-scan (list all sessions), /session-current (show active session), or
-  /session-resume (re-open an ended session), says "start a new session", "begin
-  logging", "end this session", "switch sessions", "list my sessions", "what session
-  is active", "resume session", or asks to review prior session notes. Also trigger
-  proactively if the user asks what was discussed in a previous session or wants a
-  recap of prior work.
+  Direct session management. Invoke on /sessions <cmd> or when user says start/end/switch/scan/resume/current a session. Maps cleanly to Python script calls with minimal reasoning.
 user-invocable: true
 ---
 
@@ -31,164 +24,69 @@ Config file (create if absent):
 
 ---
 
-## On /session-new
+## Direct Command Mapping
 
-Run these steps in order:
+Each invocation maps directly to a single Python call. No decision trees—just execute:
 
-### 0. Detect and confirm the project
+### /sessions init \<name\>
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py detect-project
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <name>
 ```
 
-Present the output to the user:
-> "Sessions for this repo will be stored in `<sessions dir>`. Does that look right?"
+Print the created file path. If user asks to scan prior sessions first, run `/sessions scan` 
+separately.
 
-If the user wants a different project name, ask them to add a `project_aliases` entry
-to `~/.claude/skills/sessions/config.yaml` (see config docs) and re-run `/session-new`.
-
-### 1. Surface prior sessions
+### /sessions scan
 
 ```bash
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan
 ```
 
-If sessions exist, present each filename and its overview paragraph. Ask the
-user whether any are relevant to what they're about to work on. **Do not read
-an entire session file into context without asking first** — overviews exist
-precisely to avoid context pollution on fresh tasks.
+Print all session filenames and overviews.
 
-### 2. Name the session
-
-Based on the user's first message or stated intent, propose a short kebab-case
-slug summarizing the session's essence (e.g. `api-auth-refactor`,
-`onboarding-debug`, `sessions-skill-creation`). Ask the user to approve or
-adjust it, then run:
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <approved-name>
-```
-
-Confirm the file that was created (the path is printed by the `init` command).
-
----
-
-## On /session-end
-
-Ends the active session cleanly. Run these steps:
-
-### 1. Write the final pending turn
-
-Before ending, write `.claude/sessions/.pending-turn.json` for the current turn
-(same as turn-end logging below) — include `"session_end": true` in the JSON so
-the stop hook knows to finalize the session after appending the turn.
-
-### 2. Flush immediately
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
-```
-
-This commits the pending turn right now rather than waiting for the stop hook.
-The stop hook will see no pending file and do nothing.
-
-### 3. End the session
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py end
-```
-
-This appends `*Ended: YYYY-MM-DD HH:MM*` to the session file and clears the
-`.current-session` pointer. Confirm the session path that was ended.
-
----
-
-## On /session-scan
-
-Lists all sessions with their overviews:
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan
-```
-
-Present the output to the user. If any session looks relevant to what they're
-working on, offer to read it in full — but only load it after they confirm.
-
----
-
-## On /session-current
-
-Shows the active session file and its current overview:
+### /sessions current
 
 ```bash
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py current
 ```
 
-Report both the file path and the overview to the user. If there is no active
-session, say so and offer to start one with `/session-new`.
+Print active session file path and overview.
 
----
-
-## On /session-resume
-
-Re-opens an ended session as the active session. Run these steps:
-
-### 1. Flush any pending turn for the current session
+### /sessions end
 
 ```bash
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py end
 ```
 
-### 2. List available sessions (if no target was given)
+Flush pending turn, then end the session. Confirm the path.
 
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan
-```
-
-Present each session's filename and overview, then ask the user which one to resume.
-
-### 3. Resume
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py resume <n>
-```
-
-Where `<n>` is the session number (e.g. `3`) or a slug fragment. This sets the
-session as current **and** appends `*Resumed: YYYY-MM-DD HH:MM*` to the file so
-the history shows the gap. Confirm the path that is now active.
-
----
-
-## On /session-switch
-
-Switches the active session to an existing one. Run these steps:
-
-### 1. Flush the current turn first
-
-Before switching, write and flush the pending turn for the current session so
-it lands in the right file:
+### /sessions switch \<n\>
 
 ```bash
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
-```
-
-### 2. List available sessions
-
-```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan
-```
-
-Present each session's filename and overview. Ask the user which session to
-switch to.
-
-### 3. Switch
-
-```bash
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py switch <n>
 ```
 
-Where `<n>` is the session number (e.g. `3`) or a slug fragment. Confirm the
-session that is now active.
+Where `<n>` is session number or slug fragment. Flush first, then switch.
+
+### /sessions resume \<n\>
+
+```bash
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py resume <n>
+```
+
+Where `<n>` is session number or slug fragment. Flush first, then resume.
+
+### /sessions detect-project
+
+```bash
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py detect-project
+```
+
+Print auto-detected project name and sessions directory.
 
 ---
 
@@ -292,14 +190,71 @@ What you did and why — one or two sentences.
 
 ---
 
-## Reviewing Prior Notes
+### /sessions capture \<proj\> \<name\>
 
-When the user asks about previous work, or when beginning a new session:
+Captures the current Claude Code session as a session file. Steps:
 
-1. Run `scan` to get overviews
-2. Identify sessions likely to be relevant (by filename slug + overview text)
-3. Offer to read specific sessions: *"Session 3 (`api-auth-refactor`) looks
-   relevant — want me to read it in full?"*
-4. Only load the file after explicit confirmation
+**1. Read the transcript:**
+```bash
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py read-transcript
+```
+(Uses `$CLAUDE_CODE_SESSION_ID` automatically. Output: JSON with `title`, `turns`, `files_changed`.)
 
-This keeps fresh sessions clean while making prior context available on demand.
+**2. Get the target file path:**
+```bash
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py capture-path <proj> <name>
+```
+
+**3. Synthesize and write the session file.**
+
+Using the transcript JSON + your own conversation context, generate a full session markdown
+file and write it to the path from step 2 using the Write tool. Use this format:
+
+```markdown
+# <Title from aiTitle or derived from name>
+
+## Overview
+
+<One paragraph summarizing the entire session — what was attempted, decided, and changed.>
+
+---
+
+*Captured: YYYY-MM-DD HH:MM*
+
+## Turn 1 — <timestamp from first user message>
+
+### Prompt
+<verbatim or lightly cleaned user prompt>
+
+### Summary
+<1–2 sentences: what was done and why>
+
+### Files Changed
+| File | Action |
+|------|--------|
+| `path/to/file` | edited |
+
+### Decisions
+- <any notable decisions from this turn>
+
+---
+...repeat for each real user↔assistant turn...
+```
+
+- Skip system-injected turns (command outputs, /model switches, interrupt notices).
+- Group each real user prompt with the assistant work that followed it as one Turn.
+- Files changed: include only turns where actual file edits happened.
+- The file is NOT set as the active session — it's a snapshot, not an ongoing session.
+
+---
+
+## Reviewing Prior Sessions
+
+When user asks about previous work:
+
+1. Run `/sessions scan` to list overviews
+2. Identify relevant sessions by filename slug + overview text
+3. Offer to read: *"Session N (`slug`) looks relevant — want me to read it in full?"*
+4. Only read full file after explicit user confirmation
+
+This avoids context pollution while keeping past work discoverable.
