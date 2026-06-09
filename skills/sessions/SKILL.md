@@ -3,6 +3,8 @@ name: sessions
 description: >
   Direct session management. Invoke on /sessions <cmd> or when user says start/end/switch/scan/resume/current a session. Maps cleanly to Python script calls with minimal reasoning.
 user-invocable: true
+subagent: true
+model: haiku
 ---
 
 # Sessions
