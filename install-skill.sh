@@ -6,4 +6,4 @@ if [ -d "$1" ]; then
 fi
 mkdir -p ~/.claude/skills/"$1"
 # cp -srf "${PWD}"/skills/"$1"/.[^.]* ~/.claude/skills/"$1"/ # SOURCE must resolve to an absolute path to work
-cp -srf "${PWD}"/skills/"$1"/ ~/.claude/skills/"$1"/ # SOURCE must resolve to an absolute path to work
+cp -srf "${PWD}"/skills/"$1"/ ~/.claude/skills/ # SOURCE must resolve to an absolute path to work
