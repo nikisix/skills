@@ -104,7 +104,10 @@ Get the correct path first:
 python3 /Users/six/.claude/skills/sessions/scripts/sessions.py pending-path
 ```
 
-Write the JSON to that path (e.g. `/Users/six/code/sessions/my-repo/.pending-turn.json`).
+Write the JSON to that path. The filename includes the current `CLAUDE_CODE_SESSION_ID` (e.g.
+`.pending-turn-8670aafb-….json`), so parallel sessions each write to their own file without
+clobbering each other. The Stop hook reads the same session-scoped file, so the turn always
+lands in the right session note.
 
 Structure:
 

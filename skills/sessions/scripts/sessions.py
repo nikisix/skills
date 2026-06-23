@@ -9,11 +9,13 @@ Usage:
   sessions.py switch <n>           — switch current session to number n
   sessions.py resume <n>           — re-open an ended session, add Resumed timestamp
   sessions.py end                  — end current session (add footer, clear pointer)
+  sessions.py merge <src> <tgt>    — append all turns from src into tgt, renumber, switch to tgt, delete src
+  sessions.py merge <src> <tgt> --keep  — same but keep source file
   sessions.py flush                — process pending turn immediately (no stdin; used before switch/end)
   sessions.py stop-hook            — process pending turn (called by Stop hook)
   sessions.py detect-project       — print auto-detected project name and sessions dir
   sessions.py sessions-dir         — print the current sessions dir path
-  sessions.py pending-path         — print the full path to .pending-turn.json
+  sessions.py pending-path         — print the full path to the pending turn file for this session
   sessions.py list-projects        — list all projects in sessions root
   sessions.py capture <proj> <name> <overview> — create session in <proj> with overview
   sessions.py capture-path <proj> <name>       — return target path without creating file
@@ -28,8 +30,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-PENDING_FILE = ".pending-turn.json"
-CURRENT_SESSION_FILE = ".current-session"
 CONFIG_PATH = Path.home() / ".claude/skills/sessions/config.yaml"
 
 
@@ -99,6 +99,20 @@ def get_sessions_dir() -> Path:
     return sessions_dir
 
 
+def _pending_filename(session_id: str = "") -> str:
+    """Return the pending turn filename scoped to the given session (or env var)."""
+    if not session_id:
+        session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    return f".pending-turn-{session_id}.json" if session_id else ".pending-turn.json"
+
+
+def _current_session_filename(session_id: str = "") -> str:
+    """Return the current-session pointer filename scoped to the given session (or env var)."""
+    if not session_id:
+        session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    return f".current-session-{session_id}" if session_id else ".current-session"
+
+
 def next_number(sessions_dir: Path) -> int:
     files = list(sessions_dir.glob("[0-9]*.md"))
     if not files:
@@ -111,8 +125,8 @@ def next_number(sessions_dir: Path) -> int:
     return max(nums) + 1 if nums else 1
 
 
-def get_current_session(sessions_dir: Path) -> "Path | None":
-    state_file = sessions_dir / CURRENT_SESSION_FILE
+def get_current_session(sessions_dir: Path, session_id: str = "") -> "Path | None":
+    state_file = sessions_dir / _current_session_filename(session_id)
     if not state_file.exists():
         return None
     session_path = Path(state_file.read_text().strip())
@@ -133,16 +147,16 @@ def init_session(sessions_dir: Path, name: str) -> Path:
         f"---\n\n"
         f"*Started: {now}*\n"
     )
-    (sessions_dir / CURRENT_SESSION_FILE).write_text(str(session_path))
+    (sessions_dir / _current_session_filename()).write_text(str(session_path))
     return session_path
 
 
-def end_session(session_path: Path, sessions_dir: Path):
+def end_session(session_path: Path, sessions_dir: Path, session_id: str = ""):
     """Append ended timestamp and clear current session pointer."""
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     content = session_path.read_text()
     session_path.write_text(content.rstrip() + f"\n\n---\n\n*Ended: {now}*\n")
-    (sessions_dir / CURRENT_SESSION_FILE).unlink(missing_ok=True)
+    (sessions_dir / _current_session_filename(session_id)).unlink(missing_ok=True)
 
 
 def resume_session(sessions_dir: Path, target: str) -> Path:
@@ -161,7 +175,7 @@ def resume_session(sessions_dir: Path, target: str) -> Path:
     if not matched:
         raise ValueError(f"No session matching '{target}'")
 
-    (sessions_dir / CURRENT_SESSION_FILE).write_text(str(matched))
+    (sessions_dir / _current_session_filename()).write_text(str(matched))
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     content = matched.read_text()
     matched.write_text(content.rstrip() + f"\n\n---\n\n*Resumed: {now}*\n")
@@ -174,12 +188,12 @@ def switch_session(sessions_dir: Path, target: str) -> Path:
     # Exact number prefix match first
     for f in files:
         if re.match(rf"^{re.escape(target)}[-.]", f.name) or f.name == target:
-            (sessions_dir / CURRENT_SESSION_FILE).write_text(str(f))
+            (sessions_dir / _current_session_filename()).write_text(str(f))
             return f
     # Partial slug match
     for f in files:
         if target in f.name:
-            (sessions_dir / CURRENT_SESSION_FILE).write_text(str(f))
+            (sessions_dir / _current_session_filename()).write_text(str(f))
             return f
     raise ValueError(f"No session matching '{target}'")
 
@@ -259,8 +273,8 @@ def append_turn(session_path: Path, turn_data: dict):
 
 
 def flush_pending(sessions_dir: Path):
-    """Process .pending-turn.json immediately without stdin (used before switch/end)."""
-    pending_path = sessions_dir / PENDING_FILE
+    """Process pending turn immediately without stdin (used before switch/end)."""
+    pending_path = sessions_dir / _pending_filename()
     if not pending_path.exists():
         return None
     session_path = get_current_session(sessions_dir)
@@ -279,20 +293,22 @@ def flush_pending(sessions_dir: Path):
 
 
 def run_stop_hook():
-    """Called by the Stop hook: process .pending-turn.json if present."""
+    """Called by the Stop hook: read session_id from stdin, process pending turn."""
     try:
-        json.load(sys.stdin)
+        hook_data = json.load(sys.stdin)
+        # Prefer session_id from hook payload; fall back to env if hook doesn't provide it
+        session_id = hook_data.get("session_id", "") or os.environ.get("CLAUDE_CODE_SESSION_ID", "")
     except Exception:
-        pass
+        session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
 
     sessions_dir = get_sessions_dir()
-    pending_path = sessions_dir / PENDING_FILE
+    pending_path = sessions_dir / _pending_filename(session_id)
 
     if not pending_path.exists():
         print(json.dumps({}))
         return
 
-    session_path = get_current_session(sessions_dir)
+    session_path = get_current_session(sessions_dir, session_id)
     if not session_path:
         pending_path.unlink(missing_ok=True)
         print(json.dumps({}))
@@ -303,7 +319,7 @@ def run_stop_hook():
         do_end = turn_data.pop("session_end", False)
         append_turn(session_path, turn_data)
         if do_end:
-            end_session(session_path, sessions_dir)
+            end_session(session_path, sessions_dir, session_id)
     except Exception as e:
         print(json.dumps({"systemMessage": f"sessions: failed to write turn — {e}"}))
         return
@@ -406,6 +422,57 @@ def read_transcript(session_id: str) -> dict:
     }
 
 
+def _find_session(sessions_dir: Path, target: str) -> Path:
+    """Find a session file by number prefix, exact name, or slug fragment."""
+    files = list(sessions_dir.glob("[0-9]*.md"))
+    for f in files:
+        if re.match(rf"^{re.escape(target)}[-.]", f.name) or f.name == target:
+            return f
+    for f in files:
+        if target in f.name:
+            return f
+    raise ValueError(f"No session matching '{target}'")
+
+
+def merge_sessions(sessions_dir: Path, source: str, target: str, keep_source: bool = False) -> tuple[Path, Path]:
+    """Append all turns from source into target, renumber them, switch current to target."""
+    source_path = _find_session(sessions_dir, source)
+    target_path = _find_session(sessions_dir, target)
+
+    if source_path == target_path:
+        raise ValueError("Source and target are the same session")
+
+    source_content = source_path.read_text()
+
+    # Extract each turn block — runs from "## Turn N —" until the next turn, divider, or EOF
+    turn_blocks = re.findall(
+        r'(## Turn \d+ — .*?)(?=\n## Turn |\n---|\Z)',
+        source_content,
+        re.DOTALL,
+    )
+
+    target_content = target_path.read_text()
+
+    # Strip trailing "--- *Ended: ...*" footer so appended turns integrate cleanly
+    target_content = re.sub(r'\n\n---\n\n\*Ended:[^\n]*\n?$', '', target_content)
+
+    existing_count = len(re.findall(r'^## Turn \d+', target_content, re.MULTILINE))
+
+    new_content = target_content.rstrip()
+    for i, block in enumerate(turn_blocks):
+        new_num = existing_count + i + 1
+        renumbered = re.sub(r'^## Turn \d+', f'## Turn {new_num}', block.strip(), count=1)
+        new_content += '\n\n' + renumbered
+
+    target_path.write_text(new_content.rstrip() + '\n')
+    (sessions_dir / _current_session_filename()).write_text(str(target_path))
+
+    if not keep_source:
+        source_path.unlink()
+
+    return source_path, target_path
+
+
 def list_projects() -> list:
     """List all projects in the sessions root."""
     config = load_config()
@@ -505,6 +572,21 @@ def main():
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)
 
+    elif cmd == "merge":
+        if len(sys.argv) < 4:
+            print("Error: merge requires source and target session identifiers")
+            print("Usage: sessions.py merge <source> <target> [--keep]")
+            sys.exit(1)
+        keep = "--keep" in sys.argv[4:]
+        try:
+            src_path, tgt_path = merge_sessions(sessions_dir, sys.argv[2], sys.argv[3], keep_source=keep)
+            action = "kept" if keep else "deleted"
+            print(f"Merged {src_path.name} → {tgt_path.name} (source {action})")
+            print(f"Switched to: {tgt_path}")
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+
     elif cmd == "end":
         session = get_current_session(sessions_dir)
         if not session:
@@ -524,7 +606,7 @@ def main():
         print(sessions_dir)
 
     elif cmd == "pending-path":
-        print(sessions_dir / PENDING_FILE)
+        print(sessions_dir / _pending_filename())
 
     elif cmd == "stop-hook":
         run_stop_hook()
