@@ -14,6 +14,25 @@ You are designing (or refining) an epic and breaking it down into multiple right
 
 ## Process
 
+```mermaid
+flowchart TD
+    A{Epic exists yet?} -->|Yes| B[Read pasted epic]
+    A -->|No| C[Collaborate to design it]
+    B --> D[Pick slug + parent dir]
+    C --> D
+    D --> E[Propose decomposition<br/>via splitting patterns]
+    E --> F{User approves split?}
+    F -->|No, revise| E
+    F -->|Yes| G[Write epic.md: index + ticket-flow diagram]
+    G --> H[Draft child ticket N]
+    H --> I{User approves ticket?}
+    I -->|No, revise| H
+    I -->|Yes| J[Write ticket-NN]
+    J --> K{More tickets?}
+    K -->|Yes| H
+    K -->|No| L[Final report]
+```
+
 ### 1. Figure out whether the epic exists yet
 Ask the user upfront: **"Do you already have an epic description, or do we need to design one together?"**
 
@@ -35,6 +54,8 @@ Create that directory before writing any files.
 ### 3. Propose the decomposition
 Before drafting any ticket content, present a one-line summary of each proposed child ticket — numbered, ordered roughly by execution sequence. Each one should sound like 1-5 days of work. Aim for 2-6 tickets; if you find yourself proposing more than 6, the epic is probably too big and should be split into multiple epics — surface that.
 
+Decompose using the **Splitting patterns** in `../jira-ticket/template.md` (workflow steps, business-rule variations, major effort, simple/complex, variations in data, CRUD operations, defer performance, break out a spike) rather than improvising the breakdown. Prefer thin vertical slices that each deliver value on their own.
+
 Format example (do not copy verbatim; adapt to the epic):
 ```
 Proposed decomposition (5 tickets):
@@ -47,7 +68,7 @@ Then ask the user to approve, reorder, merge, split, or rename items. **Wait for
 ### 4. Write the epic file
 Once the decomposition is approved, write `<epic-slug>/epic.md` containing:
 
-```markdown
+````markdown
 # Epic: <Title>
 
 **Slug:** `<epic-slug>`
@@ -62,9 +83,19 @@ Once the decomposition is approved, write `<epic-slug>/epic.md` containing:
 1. [<slug>](./ticket-01-<slug>.md) — <one-line summary>
 2. [<slug>](./ticket-02-<slug>.md) — <one-line summary>
 ...
-```
 
-Keep the epic file short — it is an index plus high-level rationale, not a design doc. Do not pad it.
+## Ticket flow
+```mermaid
+graph TD
+    T1["1 · <slug>"] --> T2["2 · <slug>"]
+    T1 --> T3["3 · <slug>"]
+    T2 --> T4["4 · <slug>"]
+```
+````
+
+Include the **Ticket flow** mermaid graph: one node per child ticket, edges showing execution order and dependencies (a ticket points to the tickets that can't start until it's done). This is the epic's roadmap at a glance — keep it to that.
+
+Keep the epic file short — it is an index plus high-level rationale, not a design doc. Do not pad it. The ticket-flow graph is the one diagram that belongs here; resist adding internal-architecture diagrams.
 
 ### 5. Draft and save each child ticket, one at a time
 For each child ticket, in order:

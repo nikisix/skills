@@ -16,6 +16,21 @@ If the user gave no topic, ask: "What's the ticket about?" Then continue.
 
 ## Process
 
+```mermaid
+flowchart TD
+    A[Read template.md] --> B[Gather summary, AC, technical AC]
+    B --> C{Any split<br/>trigger fires?}
+    C -->|Yes| D[Propose split using patterns]
+    D --> E{User chooses}
+    E -->|draft one / draft all / override| F[Draft ticket]
+    C -->|No| F
+    F --> G[Strip scaffolding]
+    G --> H{Anti-pattern<br/>self-check passes?}
+    H -->|No| F
+    H -->|Yes| I[Ask save path]
+    I --> J[Write file, report path]
+```
+
 ### 1. Read the template
 Start by reading `template.md` in the same directory as this skill. Use its section structure, caps, and anti-patterns as hard rules.
 
@@ -28,14 +43,9 @@ Identify what the user has and hasn't told you. You need enough to fill:
 If critical info is missing, ask focused questions via AskUserQuestion. **Do not invent business rationale or acceptance criteria** — if you can't get them from the user, leave a `> TODO:` placeholder rather than making something up.
 
 ### 3. Size-check before drafting
-Before writing, evaluate against the template's "Breaking it down" triggers:
-- Would this need >7 acceptance criteria?
-- Does it touch multiple subsystems?
-- Does the request contain "and then…" or multiple outcomes?
-- Does it sound like >5 days of work?
-- Does it require a spike first?
+Before writing, evaluate the work against the **"Breaking it down" triggers in `template.md`** (>7 ACs, multiple subsystems, "and then…", >5 days, needs a spike). Those triggers are the source of truth — don't restate or second-guess them here.
 
-**If any trigger fires, stop and recommend splitting.** Show the user a proposed split (2-4 sub-tickets, each summarized in one sentence) and ask whether to (a) proceed drafting one of them, (b) draft all of them, or (c) override and draft as a single ticket anyway. Do not silently produce an oversized ticket.
+**If any trigger fires, stop and recommend splitting.** Use the **Splitting patterns** in `template.md` to generate the split — don't improvise. Show the user a proposed split (2-4 sub-tickets, each summarized in one sentence, each naming the pattern it came from) and ask whether to (a) proceed drafting one of them, (b) draft all of them, or (c) override and draft as a single ticket anyway. Do not silently produce an oversized ticket.
 
 ### 4. Draft the ticket
 Fill in each section of the template, respecting every cap:
@@ -48,12 +58,15 @@ Fill in each section of the template, respecting every cap:
 
 The finished ticket should contain only: `## Summary`, `## Notes` (if used), `## Acceptance Criteria`, `## Technical Acceptance Criteria` (if used), and their filled-in content.
 
+**Diagrams (use when they clarify, not decorate):** a mermaid diagram is welcome when it shows *observable behavior* a QA tester could verify against — a user flow (`flowchart`), a state machine (`stateDiagram-v2`), or a user-facing sequence. Put a behavior/state diagram next to the AC it illustrates; put a high-level context diagram in Notes. A diagram is bound by the **same rule as the section it sits in**: it must depict the *what* (outcomes), never the *how* (internal architecture, call sequences, module structure, data-layer flows). Those belong in a design doc, not a ticket — if the diagram would show internals, drop it.
+
 ### 5. Self-check against anti-patterns
 Before saving, re-read your draft and verify:
 - No step-by-step implementation walkthrough
 - No function signatures or pseudo-code
 - Business rationale is in Summary, not Technical AC
 - Every AC item is something QA could verify without reading code
+- Any mermaid diagram shows user-visible behavior/state, not internal architecture
 - Summary fits the cap
 
 If any check fails, revise before saving.

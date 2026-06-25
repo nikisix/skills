@@ -27,6 +27,8 @@ _Optional. Context and open decisions — not a design._
 
 Do **not** put implementation steps here. If you find yourself writing prose paragraphs, you're writing a design doc — move it elsewhere and link.
 
+A high-level context diagram (mermaid) is fine here if it aids understanding — but it must show *the what*, not internal architecture. If it depicts modules, call sequences, or data-layer flows, it's a design doc and doesn't belong.
+
 ---
 
 ## Acceptance Criteria
@@ -37,6 +39,7 @@ _What can a QA tester verify without reading code?_
 - Use plain bullets or Given/When/Then — be consistent within the ticket
 - Each criterion should be independently testable
 - Write in terms of user-visible behavior, not internal state
+- A user-flow (`flowchart`) or state (`stateDiagram-v2`) diagram may accompany the criteria when it makes the expected behavior clearer — it must match what these criteria assert, nothing more
 
 ---
 
@@ -66,6 +69,23 @@ If any of these apply, split the ticket:
 - **Summary contains "and then…"** or lists multiple outcomes → those are separate tickets
 - **Estimate exceeds 5 days** → carve out a vertical slice that delivers value on its own
 - **Requires a spike / unknowns to be resolved first** → make the spike its own ticket
+
+### Splitting patterns
+
+When a ticket (or epic) is too big, use one of these canonical patterns to find a
+smaller slice. Each split should still deliver value on its own — prefer a thin
+vertical slice over a horizontal layer. (Synthesized from Lawrence, Wake, and the
+Humanizing Work story-splitting flowchart.)
+
+- **Workflow steps** — build the start and end of a workflow first; add the middle steps as later tickets.
+- **Business-rule variations** — ship a subset of the rules first (e.g. "flexible dates" → one date scheme), add the rest later.
+- **Major effort** — when the first variant carries most of the cost, do one variant first, then the rest cheaply (e.g. one payment type, then all).
+- **Simple / complex** — do the simple core that delivers most of the value; defer the complications.
+- **Variations in data** — handle one kind/source of data first, add other kinds later.
+- **Data-entry / interface methods** — ship a basic input first, add the richer UI later.
+- **Defer performance** — make it work first ("searching…"), meet the perf budget in a follow-up.
+- **Operations (CRUD)** — split a "manage X" story into create / read / update / delete.
+- **Break out a spike** — if unknowns block estimation, make answering them its own ticket, then re-split.
 
 ---
 
