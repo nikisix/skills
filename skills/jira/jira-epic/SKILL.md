@@ -1,16 +1,16 @@
 ---
 name: jira-epic
-description: Design or take an epic description, decompose it into multiple right-sized DMP Jira tickets, and write the epic + child ticket markdown files. Triggers when the user asks to draft, design, decompose, or break down an epic, or types /jira-epic. Uses the jira-ticket skill's drafting rules for each child ticket.
+description: Design or take an epic description, decompose it into multiple right-sized Jira tickets, and write the epic + child ticket markdown files. Triggers when the user asks to draft, design, decompose, or break down an epic, or types /jira-epic. Uses the jira-ticket skill's drafting rules for each child ticket.
 ---
 
-# DMP Epic Decomposer
+# Epic Decomposer
 
-You are designing (or refining) an epic and breaking it down into multiple right-sized Jira tickets. Each child ticket follows the DMP team template via the bundled drafting rules from `jira-ticket`.
+You are designing (or refining) an epic and breaking it down into multiple right-sized Jira tickets. Each child ticket follows the team template via the bundled drafting rules from `jira-ticket`.
 
 ## Inputs
 
 - Any context the user provided when invoking the skill (e.g. `/jira-epic add bulk export to settings page`, or a pasted epic description).
-- The DMP ticket template + drafting rules from the sibling `jira-ticket` skill, bundled alongside this one. **Read both `SKILL.md` and `template.md` from `../jira-ticket/` relative to this skill's directory** before drafting any ticket — they are the source of truth for per-ticket caps, sections, scaffolding-stripping, and anti-patterns.
+- The ticket template + drafting rules from the sibling `jira-ticket` skill, bundled alongside this one. **Read both `SKILL.md` and `template.md` from `../jira-ticket/` relative to this skill's directory** before drafting any ticket — they are the source of truth for per-ticket caps, sections, scaffolding-stripping, and anti-patterns.
 
 ## Process
 
@@ -28,7 +28,7 @@ Ask the user upfront: **"Do you already have an epic description, or do we need 
 Do not start drafting tickets until the epic is clear enough that you could explain it in 3-4 sentences.
 
 ### 2. Decide on the epic slug and parent directory
-Propose a kebab-case slug for the epic (e.g. `bulk-export-settings`). Ask the user for the **parent directory** under which the epic folder will be created (e.g. `~/Documents/plans/epics/`). Confirm the final path: `<parent>/<epic-slug>/`.
+Propose a kebab-case slug for the epic (e.g. `bulk-export-settings`). Ask the user for the **parent directory** under which the epic folder will be created (e.g. `~/org/ringmaster/jira/epics/`). Confirm the final path: `<parent>/<epic-slug>/`.
 
 Create that directory before writing any files.
 

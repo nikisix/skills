@@ -1,6 +1,6 @@
 ---
 name: jira-ticket
-description: Draft a Jira ticket as a markdown file using the DMP team template. Triggers when the user asks to draft, write, or create a Jira ticket / issue / story, or types /jira-ticket. Produces a single right-sized (1-5 day) ticket file; will refuse and recommend splitting if the work is too big.
+description: Draft a Jira ticket as a markdown file using the team template. Triggers when the user asks to draft, write, or create a Jira ticket / issue / story, or types /jira-ticket. Produces a single right-sized (1-5 day) ticket file; will refuse and recommend splitting if the work is too big.
 ---
 
 # Jira Ticket Drafter
