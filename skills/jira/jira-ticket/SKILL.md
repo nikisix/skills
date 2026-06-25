@@ -72,7 +72,7 @@ Before saving, re-read your draft and verify:
 If any check fails, revise before saving.
 
 ### 6. Ask where to save
-Ask the user for the output path. Suggest a default filename in kebab-case based on the ticket topic (e.g. `export-timeout-fix.md`). Do **not** assume a directory — ask each time.
+Ask the user for the output path. Suggest a default directory and filename in kebab-case based on the ticket topic (e.g. `export-timeout-fix.md`). Confirm before saving.
 
 ### 7. Write the file
 Write the finished markdown to the chosen path. Report the path back. Do not commit, push, or open the file — just write it.
