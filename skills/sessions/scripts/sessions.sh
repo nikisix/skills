@@ -15,7 +15,7 @@ Sessions CLI — manage Claude Code session notes
 Usage: sessions <command> [args...]
 
 Commands:
-  init <name>           Create new session with kebab-case name (active project)
+  init <folder>/<name>  Create new session with kebab-case name (active project)
   scan                  List all sessions with overviews (active project)
   current               Show active session file and overview
   end                   End the active session (flushes pending turn first)

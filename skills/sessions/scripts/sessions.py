@@ -3,7 +3,7 @@
 
 Usage:
   sessions.py next-number          — print next session number
-  sessions.py init <name>          — create session file, set as current
+  sessions.py init <folder>/<name> — create session file in folder, set as current
   sessions.py scan                 — print all session filenames + overviews
   sessions.py current              — print path to active session file
   sessions.py switch <n>           — switch current session to number n
@@ -22,6 +22,8 @@ Usage:
   sessions.py read-transcript [<session-id>]   — parse session JSONL into structured JSON
   sessions.py summarize [spec]     — emit turn data for Claude to synthesize as a git-commit summary
                                      spec: none=overview, a-b=range, -n=last n, YYYY-MM-DD=since date
+  sessions.py set-sessions-dir <dir> — create project folder in sessions_root, set as active for this session
+  sessions.py set-project <dir>    — alias for set-sessions-dir
 """
 
 import json
@@ -91,14 +93,38 @@ def get_project_name(config: dict | None = None) -> str:
     return name
 
 
+def get_sessions_root() -> Path:
+    config = load_config()
+    return Path(config.get("sessions_root", "~/code/sessions")).expanduser()
+
+
+def _project_override_filename(session_id: str = "") -> str:
+    """Return the project-override pointer filename scoped to the given session (or env var)."""
+    if not session_id:
+        session_id = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
+    return f".current-project-{session_id}" if session_id else ".current-project"
+
+
 def get_sessions_dir() -> Path:
     config = load_config()
-    sessions_root_str = config.get("sessions_root", "~/code/sessions")
-    sessions_root = Path(sessions_root_str).expanduser()
-    project = get_project_name(config)
+    sessions_root = Path(config.get("sessions_root", "~/code/sessions")).expanduser()
+    override_file = sessions_root / _project_override_filename()
+    if override_file.exists():
+        project = override_file.read_text().strip()
+    else:
+        project = get_project_name(config)
     sessions_dir = sessions_root / project
     sessions_dir.mkdir(parents=True, exist_ok=True)
     return sessions_dir
+
+
+def set_project(name: str) -> Path:
+    """Create a project folder in sessions_root and set it as active for this session."""
+    sessions_root = get_sessions_root()
+    project_dir = sessions_root / name
+    project_dir.mkdir(parents=True, exist_ok=True)
+    (sessions_root / _project_override_filename()).write_text(name)
+    return project_dir
 
 
 def _pending_filename(session_id: str = "") -> str:
@@ -610,9 +636,26 @@ def main():
 
     elif cmd == "init":
         if len(sys.argv) < 3:
-            print("Error: init requires a session name (e.g. api-auth-refactor)")
+            print("Error: init requires a session name")
             sys.exit(1)
-        path = init_session(sessions_dir, sys.argv[2])
+        sessions_root = get_sessions_root()
+        if len(sys.argv) >= 4:
+            # init <dir> <name>
+            folder, name = sys.argv[2], sys.argv[3]
+            target_dir = sessions_root / folder
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (sessions_root / _project_override_filename()).write_text(folder)
+        elif "/" in sys.argv[2]:
+            # init <dir>/<name>
+            folder, _, name = sys.argv[2].partition("/")
+            target_dir = sessions_root / folder
+            target_dir.mkdir(parents=True, exist_ok=True)
+            (sessions_root / _project_override_filename()).write_text(folder)
+        else:
+            # init <name> — uses auto-detected or previously set project
+            target_dir = sessions_dir
+            name = sys.argv[2]
+        path = init_session(target_dir, name)
         print(f"Created: {path}")
 
     elif cmd == "scan":
@@ -741,6 +784,13 @@ def main():
             sys.exit(1)
         path = capture_session(project, name, overview.strip())
         print(f"Captured: {path}")
+
+    elif cmd in ("set-sessions-dir", "set-project"):
+        if len(sys.argv) < 3:
+            print(f"Error: {cmd} requires a directory name")
+            sys.exit(1)
+        project_dir = set_project(sys.argv[2])
+        print(f"Project dir: {project_dir}")
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

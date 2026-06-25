@@ -30,14 +30,34 @@ Config file (create if absent):
 
 Each invocation maps directly to a single Python call. No decision trees—just execute:
 
-### /sessions init \<name\>
+### /sessions set-sessions-dir \<dir\>  (alias: /sessions set-project \<dir\>)
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <name>
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py set-sessions-dir <dir>
 ```
 
-Print the created file path. If user asks to scan prior sessions first, run `/sessions scan` 
-separately.
+Create `<dir>` inside `$sessions_root` and make it the active project folder for this
+Claude session. Subsequent bare `init <name>` calls will use this folder. Print the
+created directory path.
+
+### /sessions init \<name\>
+
+Three equivalent forms — all create a numbered session file and set it as current:
+
+```bash
+# Use auto-detected (or set-sessions-dir) project folder
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <name>
+
+# Explicit folder + name (two args)
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <dir> <name>
+
+# Slash notation (single arg with /)
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <dir>/<name>
+```
+
+When `<dir>` is provided, it is created if absent and set as the active project for
+this session. Print the created file path. If user asks to scan prior sessions first,
+run `/sessions scan` separately.
 
 ### /sessions scan
 
