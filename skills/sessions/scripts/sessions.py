@@ -20,6 +20,8 @@ Usage:
   sessions.py capture <proj> <name> <overview> — create session in <proj> with overview
   sessions.py capture-path <proj> <name>       — return target path without creating file
   sessions.py read-transcript [<session-id>]   — parse session JSONL into structured JSON
+  sessions.py summarize [spec]     — emit turn data for Claude to synthesize as a git-commit summary
+                                     spec: none=overview, a-b=range, -n=last n, YYYY-MM-DD=since date
 """
 
 import json
@@ -486,6 +488,91 @@ def list_projects() -> list:
     return sorted(projects)
 
 
+def parse_turns(content: str) -> list:
+    """Extract all turns from session markdown content as structured dicts."""
+    turns = []
+    turn_pattern = re.compile(r"^## Turn (\d+) — (.+)$", re.MULTILINE)
+    matches = list(turn_pattern.finditer(content))
+    for i, match in enumerate(matches):
+        num = int(match.group(1))
+        timestamp = match.group(2).strip()
+        start = match.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(content)
+        block = content[start:end].strip()
+        turns.append({"num": num, "timestamp": timestamp, "block": block})
+    return turns
+
+
+def _parse_summarize_spec(spec: str | None) -> tuple:
+    """Parse a summarize argument. Returns (mode, value).
+
+    Modes: 'overview', 'range' (a,b), 'date' str, None on error.
+    For range: a or b may be None. -n means last n turns (a=None, b=n).
+    """
+    if not spec:
+        return ("overview", None)
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", spec):
+        return ("date", spec)
+    m = re.match(r"^(\d*)-(\d*)$", spec)
+    if m:
+        a = int(m.group(1)) if m.group(1) else None
+        b = int(m.group(2)) if m.group(2) else None
+        return ("range", (a, b))
+    return (None, None)
+
+
+def summarize_session(sessions_dir: Path, spec: str | None) -> str:
+    """Emit session data for a given spec so Claude can synthesize a git-commit summary."""
+    session_path = get_current_session(sessions_dir)
+    if not session_path:
+        return "Error: No active session"
+
+    content = session_path.read_text()
+    mode, value = _parse_summarize_spec(spec)
+
+    if mode == "overview":
+        m = re.search(r"## Overview\n+(.*?)(?:\n---|\n## |\Z)", content, re.DOTALL)
+        return m.group(1).strip() if m else "(no overview)"
+
+    turns = parse_turns(content)
+
+    if mode == "range":
+        a, b = value
+        if a is None and b is not None:
+            selected = turns[-b:]
+            range_desc = f"last {b} turns"
+        elif a is not None and b is None:
+            selected = [t for t in turns if t["num"] >= a]
+            range_desc = f"turns {a}+"
+        elif a is not None and b is not None:
+            selected = [t for t in turns if a <= t["num"] <= b]
+            range_desc = f"turns {a}-{b}"
+        else:
+            selected = turns
+            range_desc = "all turns"
+    elif mode == "date":
+        date_cutoff = datetime.strptime(value, "%Y-%m-%d")
+        selected = []
+        for t in turns:
+            try:
+                ts = datetime.strptime(t["timestamp"], "%Y-%m-%d %H:%M")
+                if ts >= date_cutoff:
+                    selected.append(t)
+            except ValueError:
+                pass
+        range_desc = f"since {value}"
+    else:
+        return f"Error: unrecognized argument '{spec}'"
+
+    if not selected:
+        return f"(no turns found for {range_desc})"
+
+    return json.dumps(
+        {"session": session_path.stem, "range_desc": range_desc, "turns": selected},
+        indent=2,
+    )
+
+
 def capture_session(project: str, name: str, overview: str) -> Path:
     """Create a new session in a specific project with overview from stdin."""
     config = load_config()
@@ -636,6 +723,10 @@ def main():
         else:
             for proj in projects:
                 print(proj)
+
+    elif cmd == "summarize":
+        spec = sys.argv[2] if len(sys.argv) > 2 else None
+        print(summarize_session(sessions_dir, spec))
 
     elif cmd == "capture":
         if len(sys.argv) < 5:

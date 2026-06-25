@@ -90,6 +90,49 @@ python3 /Users/six/.claude/skills/sessions/scripts/sessions.py detect-project
 
 Print auto-detected project name and sessions directory.
 
+### /sessions summarize [spec]
+
+```bash
+python3 /Users/six/.claude/skills/sessions/scripts/sessions.py summarize [spec]
+```
+
+Emit session data scoped to `spec`, then **synthesize a git-commit-style summary** from the output.
+
+**Argument forms:**
+
+| Spec | Behavior |
+|------|----------|
+| *(none)* | Print the `## Overview` section verbatim — no synthesis needed |
+| `a-b` | Emit turns a through b (inclusive) |
+| `a-` | Emit turns a through the last turn |
+| `-n` | Emit the last n turns |
+| `YYYY-MM-DD` | Emit all turns since that date (inclusive) |
+
+**No-arg:** the script prints the Overview text. Print it directly to the user.
+
+**With spec:** the script prints a JSON object:
+```json
+{
+  "session": "<slug>",
+  "range_desc": "<human-readable range>",
+  "turns": [
+    {"num": 1, "timestamp": "YYYY-MM-DD HH:MM", "block": "<raw turn markdown>"}
+  ]
+}
+```
+
+Read the `block` field of each turn to extract `### Summary`, `### Files Changed`,
+`### Decisions`, and `### Errors/Blockers`. Then write a git-commit-style message:
+
+- **Subject line** (imperative, ≤72 chars): a synthesized phrase describing what changed
+  across all selected turns. Example: `Add summarize command to sessions skill`
+- **Blank line**
+- **Body**: bullet points grouped by theme (not per-turn). Prefer 3–7 bullets.
+- **Files changed** footer if any files appear across the turns.
+- **Decisions** footer if notable decisions appear.
+
+Print the full commit message to the user. Do not add any framing text around it.
+
 ---
 
 ## Turn-End Logging (Every Turn)
