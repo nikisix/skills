@@ -49,9 +49,12 @@ Before writing, evaluate the work against the **"Breaking it down" triggers in `
 
 ### 4. Draft the ticket
 Fill in each section of the template, respecting every cap:
-- Summary: 3-5 sentences, ~100 words, no implementation details
-- Notes: ≤200 words, bullets, optional — omit the section entirely if there's nothing real to put there
-- Acceptance Criteria: 3-7 items, user-visible outcomes only
+In Jira, the Summary is the  The Description is the main body text, where you include detailed context, user stories, acceptance criteria, steps to reproduce, and attachments
+- Summary: short title of your ticket (typically 3–10 words), designed to be read quickly on board views or backlogs.
+- Description:
+    - main body text, where you include detailed context, user stories, diagrams, acceptance criteria, steps to reproduce, and attachments.
+    - 3-5 sentences, ~100 words, no implementation details
+- Acceptance Criteria: 1-4 items, user-visible outcomes only
 - Technical AC: 3-10 items, optional — omit if not warranted
 
 **Strip the instructional cap/guidance lines from the final output.** The italicized prompts (`_What is the business need..._`), the `**Cap: ...**` lines, and the bullet hints under each header are scaffolding for the author — they should not appear in the finished ticket. Keep section headers, the target-size banner, the "Breaking it down" section, and "Anti-patterns" section out of the finished ticket too — those are template metadata, not ticket content.
