@@ -92,3 +92,8 @@ def test_build_query_ands_terms_within_cs():
     assert q.startswith("all:document AND all:information AND all:extraction AND all:LLM AND (cat:cs.")
     assert q.endswith(")")
     assert "cat:cs.CL" in q and "cat:cs.IR" in q
+
+
+def test_hit_title_newline():
+    p = Paper("2610.1", "Title split\n  across lines", "a", "https://arxiv.org/abs/2610.1", date(2026, 10, 1))
+    assert arxiv_scan.render_hit(Hit(p, "item", "why\nnot"))[0] == "** Title split across lines — relevant to: item :auto:"

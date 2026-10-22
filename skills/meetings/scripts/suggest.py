@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 from config import Paths, add_org_dir_arg, paths_from_args
-from orgfile import Heading, OrgDoc
+from orgfile import Heading, OrgDoc, org_text
 from people import People
 
 EXIT_NOTHING = 2
@@ -45,11 +45,11 @@ def candidates(digest: dict) -> list[dict]:
 
 def render(item: dict, digest: dict, people: People | None = None) -> list[str]:
     owner = (people.resolve(item.get("owner")) if people else None) or item.get("owner") or (people.me if people else "Nick")
-    why = re.split(r"(?<=[.!?])\s", digest["summary"].strip(), maxsplit=1)[0]
+    why = re.split(r"(?<=[.!?])\s", org_text(digest["summary"]), maxsplit=1)[0]
     landed = digest.get("landed") or {}
-    link_file, heading = landed.get("file", "worklog.org"), landed.get("heading", digest["title"])
+    link_file, heading = landed.get("file", "worklog.org"), org_text(landed.get("heading", digest["title"]))
     return [
-        f"** {item['text']} - @{owner} :auto:",
+        f"** {org_text(item['text'])} - @{org_text(owner)} :auto:",
         f"   - source: [[file:{link_file}::*{heading}][{digest['date']} {heading}]]",
         f"   - why: {why}",
     ]
@@ -77,10 +77,10 @@ def suggest(digest: dict, paths: Paths, people: People, dry_run: bool = False) -
     sec = _suggested_section(doc)
     n = 0
     for item in candidates(digest):
-        if normalize_headline(item["text"]) in seen:
+        if normalize_headline(org_text(item["text"])) in seen:
             continue
         lines = render(item, digest, people)
-        seen.add(normalize_headline(item["text"]))
+        seen.add(normalize_headline(org_text(item["text"])))
         at = _append_point(doc, sec)
         if dry_run:
             print(f"== {paths.suggestions}:{at + 1}")

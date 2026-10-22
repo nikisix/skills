@@ -13,10 +13,26 @@ from pathlib import Path
 
 DAY_RE = re.compile(r"^\* <(\d{4}-\d{2}-\d{2}) [A-Z][a-z]{2}>(.*)$")
 HEADLINE_RE = re.compile(r"^(\*+) (.*)$")
-KEYWORD_RE = re.compile(r"^(TODO|INPROGRESS|DONE) (.*)$")
+KEYWORD_RE = re.compile(r"^(TODO|INPROGRESS|BLOCKED|DONE) (.*)$")
 TAGS_RE = re.compile(r"^(.*?)\s+:([\w:]+):\s*$")
 LINK_RE = re.compile(r"\s*-\s*\[\[[^\]]+\]\[([^\]]+)\]\]\s*$")
 OWNER_RE = re.compile(r"^(.*?)\s+-\s+@(\S+)\s*$")
+INLINE_LINK_RE = re.compile(r"\[\[([^\]]+?)\](?:\[([^\]]+)\])?\]")
+URL_RE = re.compile(r"https?://\S+")
+
+
+def org_text(s) -> str:
+    """One-line, org-safe text from an LLM string: whitespace collapsed, a leading headline/bullet
+    marker removed. Every rendered line must pass through this so a '\n* ' in model output can
+    never become an unmarked top-level headline in the file."""
+    s = re.sub(r"\s+", " ", str(s or "")).strip()
+    return re.sub(r"^[*#]+\s*", "", s)
+
+
+def plain_title(s: str) -> str:
+    """Heading text for matching: [[target][desc]] -> desc, [[target]] -> target, bare URLs dropped."""
+    s = INLINE_LINK_RE.sub(lambda m: m.group(2) or m.group(1), s)
+    return re.sub(r"\s+", " ", URL_RE.sub("", s)).strip()
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -52,7 +68,7 @@ class Heading:
         owner = None
         if om := OWNER_RE.match(rest):
             rest, owner = om.groups()
-        return cls(idx, len(stars), keyword, rest.strip(), tags, owner, link)
+        return cls(idx, len(stars), keyword, plain_title(rest), tags, owner, link)
 
 
 @dataclass

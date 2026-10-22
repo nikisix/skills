@@ -108,3 +108,10 @@ def test_landed_digest_still_validates():
     d = json.loads((FIX / "digest-good.json").read_text())
     d["landed"] = {"file": "worklog.org", "heading": "Rob 1-1"}
     assert dg.validate(d) == []
+
+
+def test_schema_rejects_newlines_in_text():
+    import digest as dg
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["summary"] = "one\n* two"
+    assert any("summary" in e for e in dg.validate(d))

@@ -1,0 +1,23 @@
+* <2026-10-21 Wed>
+
+** Jira sync
+** meet with Abhi
+** DONE JHayes proof issue
+** DONE Joseph MR
+** sessions code-review command with @JN - setup
+** add Team field to jira sync
+** TRON ticketing
+** Rob 1-1
+** meet with Johnathan about RFP generation
+** DMP Data Access [[https://rmt.atlassian.net/browse/DEV-10139][DEV-10139]]
+** BLOCKED CSV Proofs - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]
+** TODO MR 79
+** TODO Abhi's MR
+** INPROGRESS meetings + worklog + arxiv -> TODO skill
+** create_mr skill
+** Ontology: delete acc_rate_table_raw
+** INPROGRESS review refactor doc
+** Refactor call for concerns
+** read [[Ontology Pipelines]]
+
+* TODO

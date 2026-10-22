@@ -90,3 +90,10 @@ def test_source_link_uses_landed_heading():
     d = _digest(landed={"file": "2026/2026-09-worklog.org", "heading": "Rob 1-1"})
     item = {"text": "x", "owner": "Nick", "due": None, "jira": None, "ticket_worthy": True}
     assert suggest.render(item, d)[1] == "   - source: [[file:2026/2026-09-worklog.org::*Rob 1-1][2026-10-20 Rob 1-1]]"
+
+
+def test_render_sanitizes_newlines():
+    d = _digest(summary="First.\n* second")
+    item = {"text": "* fix\nthis", "owner": "Nick", "due": None, "jira": None, "ticket_worthy": True}
+    out = suggest.render(item, d)
+    assert out[0] == "** fix this - @Nick :auto:" and out[2] == "   - why: First."

@@ -18,7 +18,7 @@ from typing import Callable
 
 from config import Paths, add_org_dir_arg, paths_from_args
 from digest import SKILL_DIR, extract_json, run_claude
-from orgfile import Heading, OrgDoc
+from orgfile import Heading, OrgDoc, org_text
 from state import State
 from suggest import TEMPLATE
 
@@ -163,8 +163,8 @@ def _append_point(doc: OrgDoc, idx: int) -> int:
 
 def render_hit(h: Hit) -> list[str]:
     return [
-        f"** {h.paper.title} — relevant to: {h.item} :auto:",
-        f"   - [[{h.paper.url}][arXiv:{h.paper.id}]] · {h.paper.published.isoformat()} · {h.why}",
+        f"** {org_text(h.paper.title)} — relevant to: {org_text(h.item)} :auto:",
+        f"   - [[{h.paper.url}][arXiv:{h.paper.id}]] · {h.paper.published.isoformat()} · {org_text(h.why)}",
     ]
 
 

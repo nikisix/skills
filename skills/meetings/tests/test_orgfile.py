@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from orgfile import OrgDoc, day_header
+from orgfile import Heading, OrgDoc, day_header
 
 FIX = Path(__file__).parent / "fixtures" / "worklog-sample.org"
 
@@ -103,3 +103,18 @@ def test_insert_and_save_atomic_roundtrip(tmp_path):
     assert again.lines == doc.lines
     assert out.read_text().endswith("\n")
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_heading_parse_inline_links_reduce_to_description():
+    h = Heading.parse(0, "** DMP Data Access [[https://rmt.atlassian.net/browse/DEV-10139][DEV-10139]]")
+    assert h.title == "DMP Data Access DEV-10139" and "https" not in h.title
+    assert Heading.parse(0, "** read [[Ontology Pipelines]]").title == "read Ontology Pipelines"
+    h = Heading.parse(0, "** BLOCKED CSV Proofs - @Nick - [[https://x/DEV-1][DEV-1]]")
+    assert (h.title, h.owner, h.link) == ("CSV Proofs", "Nick", "DEV-1")
+
+
+def test_org_text_sanitizer():
+    from orgfile import org_text
+    assert org_text("Line one.\n* TODO x\n- y") == "Line one. * TODO x - y"
+    assert org_text("** heading-like") == "heading-like"
+    assert org_text(None) == ""

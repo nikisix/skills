@@ -101,3 +101,47 @@ def test_followup_item_shape(org_dir):
 
 def test_org_date():
     assert render.org_date(date(2026, 10, 28)) == "<2026-10-28 Wed>"
+
+
+def real_headings():
+    doc = OrgDoc.load(FIX / "real-headings.org")
+    return doc.headings(doc.find_day(date(2026, 10, 21)), level=2)
+
+
+def test_no_match_on_url_tokens(org_dir):
+    # "dev" must not match the Jira URL tokens of a linked heading
+    assert render.match_heading("Dev standup", ["Nick"], real_headings(), people(org_dir)) is None
+
+
+def test_no_match_on_single_generic_word(org_dir):
+    assert render.match_heading("MR review", ["Nick", "Lars"], real_headings(), people(org_dir)) is None
+
+
+def test_match_two_title_tokens(org_dir):
+    h = render.match_heading("RFP generation sync", ["Nick"], real_headings(), people(org_dir))
+    assert h is not None and h.title == "meet with Johnathan about RFP generation"
+
+
+def test_real_heading_shapes(org_dir):
+    hs, p = real_headings(), people(org_dir)
+    assert render.match_heading("Rob 1:1", ["Nick", "Rob"], hs, p).title == "Rob 1-1"
+    assert render.match_heading("Abhi MR walkthrough", ["Nick", "Abhi"], hs, p).title == "Abhi's MR"
+    for title, who in [("Ontology 2.0 planning", ["Nick"]), ("Weekly catch-up", ["Nick", "Lars"]),
+                       ("Design review", ["Nick"]), ("Skill planning", ["Nick"])]:
+        assert render.match_heading(title, who, hs, p) is None, title
+
+
+def test_tokens_drop_single_chars():
+    assert "j" not in render.tokens("J.T. can't make it") and "jt" not in render.tokens("J.T.")
+
+
+def test_render_sanitizes_multiline_strings(org_dir):
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["title"] = "Bad\ntitle"
+    d["summary"] = "Line one.\n* TODO injected top-level\n- bullet"
+    d["action_items"][0]["text"] = "* do\nthe thing"
+    lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
+    assert lines[0] == "** Bad title :meeting:auto:"
+    assert "   - Line one. * TODO injected top-level - bullet" in lines
+    assert any(l.startswith("*** TODO do the thing - @Nick") for l in lines)
+    assert not any(l.startswith("* ") or l == "- bullet" for l in lines)
