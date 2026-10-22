@@ -1,0 +1,12 @@
+title: Rob 1:1
+source: slack
+attendees: Nick, Rob
+
+Rob: How's the accuracy work going?
+Nick: Good. I need to align on the Jira buckets with David this week.
+Rob: Let's sync again next Wednesday on the roadmap.
+Nick: I'll put it on the calendar.
+
+
+Rob: One more thing — can you draft the CSV proofs runbook?
+Nick: Yes, by Friday.
