@@ -1,0 +1,13 @@
+{
+  "title": "Bad",
+  "date": "2026-10-20",
+  "source": "slack",
+  "attendees": [],
+  "summary": "x",
+  "decisions": [{"text": "y", "firmness": "maybe", "by": null}],
+  "action_items": [],
+  "follow_ups": [],
+  "open_questions": [],
+  "source_quality": "notes",
+  "extra_key": true
+}
