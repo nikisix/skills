@@ -1,0 +1,36 @@
+* <2026-10-12 Mon> PTO
+
+* <2026-10-14 Wed>
+
+** 1 on 1s
+*** Abhi
+    - extraction status
+*** Reeder
+    - ontology edits
+
+* <2026-10-20 Tue>
+
+** Rob 1-1
+   - my own notes about accuracy
+** INPROGRESS Ontology 2.0 - RX Skeleton
+
+* <2026-10-21 Wed>
+
+** Reeder MR :meeting:
+   - reviewed the synonyms MR
+** CSV Proofs - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]
+*** DONE incorporate Marcus' ontology edits
+    CLOSED: [2026-10-21 Wed 09:12]
+
+* TODO
+
+** Align on Jira buckets
+** something else
+
+* Misc
+
+- [ ] compress cal files into this one
+
+* AI Roadmap & Epics
+
+** Accuracy - Owner (Nick)
