@@ -14,7 +14,8 @@ Rules:
 - `action_items`: task + owner + due date. A missing owner or date is `null` — that is a finding, not a
   gap to fill. `jira` is a `DEV-NNNN` key only if one was said. `ticket_worthy` is true only for
   engineering work of roughly half a day or more that has no Jira key.
-- `follow_ups`: proposed future meetings/syncs; resolve relative dates against the meeting date
+- `follow_ups`: proposed future meetings/syncs that involve {{ME}} (they become {{ME}}'s TODOs); a
+  sync between two other people is not a follow-up. Resolve relative dates against the meeting date
   ("Friday" = next Friday on/after the meeting date; "next Wednesday" = the following week's Wednesday).
 - `open_questions`: raised and unanswered.
 - `source_quality`: `verbatim` for a real transcript, `captions` for live captions, `notes` for notes.
