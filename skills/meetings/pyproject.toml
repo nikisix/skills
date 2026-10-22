@@ -1,0 +1,19 @@
+[project]
+name = "meetings-skill"
+version = "0.1.0"
+description = "Meeting transcripts -> org-mode worklog, suggestions, and arXiv scan"
+requires-python = ">=3.12"
+dependencies = [
+    "webvtt-py>=0.5",
+    "python-docx>=1.1",
+    "jsonschema>=4.23",
+    "pyyaml>=6.0",
+    "arxiv>=2.1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+pythonpath = ["scripts"]
+testpaths = ["tests"]
