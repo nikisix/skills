@@ -43,3 +43,11 @@ def test_archive_for_path(org_dir):
     assert p.archive_for(date(2026, 9, 3)) == org_dir / "2026" / "2026-09-worklog.org"
     assert p.worklog == org_dir / "worklog.org"
     assert p.people_file == org_dir / "meetings" / "people.yaml"
+
+
+def test_resolve_full_name_by_first_name(org_dir):
+    from people import People
+
+    people = People.load(org_dir / "meetings" / "people.yaml")
+    assert people.resolve("Abhi Gurudwar") == "Abhi"
+    assert people.resolve("Mara Stone") is None

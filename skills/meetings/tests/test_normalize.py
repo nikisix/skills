@@ -65,3 +65,41 @@ def test_key_is_stable_sha256():
     assert meta.key == hashlib.sha256(body.encode()).hexdigest()
     meta2, _ = normalize(FIX / "2026-10-20-rob-1-1.txt")
     assert meta.key == meta2.key
+
+
+def test_parse_filename_double_hyphen():
+    m = parse_filename("2026-10-22--multi-loc-extracts.txt")
+    assert m.date == date(2026, 10, 22)
+    assert m.time is None
+    assert m.title == "Multi Loc Extracts"
+    assert m.stem == "2026-10-22--multi-loc-extracts"
+
+
+def test_teams_copy_is_detected():
+    meta, body = normalize(FIX / "2026-10-22--multi-loc-extracts.txt")
+    assert meta.source == "teams"
+    assert meta.attendees == ["Mara Stone", "Abhi Gurudwar", "Nick Tomasino", "Johnathan Neil"]
+
+
+def test_teams_copy_keeps_only_speaker_utterances():
+    _, body = normalize(FIX / "2026-10-22--multi-loc-extracts.txt")
+    lines = body.splitlines()
+    assert lines[0] == "Mara Stone: Hey, Abby."
+    assert lines[1] == "Abhi Gurudwar: Good afternoon, everyone."
+    # consecutive chunks from one speaker merge into one line
+    assert lines[2] == "Mara Stone: I'll kick this off. We're going to go through the multi-line of coverage extracts."
+    assert lines[-1] == "Mara Stone: All right. Talk to you guys later."
+    for noise in ("transcription", "AI-generated", "0:05", "minutes", "\nMS\n", "\u00ee"):
+        assert noise not in body
+
+
+def test_teams_copy_parse_rejects_plain_text():
+    from normalize import parse_teams_copy
+
+    assert parse_teams_copy("Rob: hi\nNick: hello\n") is None
+
+
+def test_plain_text_body_unchanged():
+    meta, body = normalize(FIX / "2026-10-20-rob-1-1.txt")
+    assert meta.source == "slack"
+    assert body.startswith("Rob: How's the accuracy work going?")

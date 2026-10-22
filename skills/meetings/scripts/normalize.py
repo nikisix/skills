@@ -1,7 +1,11 @@
 """Normalize a transcript file (txt / vtt / docx) into canonical text plus metadata.
 
-Filename convention: YYYY-MM-DD[-HHMM]-<slug>.<ext>. Optional front-matter (key: value lines
-up to the first blank line) overrides filename-derived fields.
+Filename convention: YYYY-MM-DD[-HHMM]-<slug>.<ext> (a doubled '-' before the slug is tolerated).
+Optional front-matter (key: value lines up to the first blank line) overrides filename-derived fields.
+
+A .txt copied from the Teams transcript panel (speaker turns rendered as initials / name /
+"N minutes N secondsN:NN" / "Name N minutes N seconds" / utterance) is detected by shape and
+reduced to "Name: utterance" lines, with attendees taken from the speakers.
 """
 
 from __future__ import annotations
@@ -14,10 +18,14 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d{2})(\d{2}))?-(.+)$")
+FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d{2})(\d{2}))?-+(.+)$")
 FRONTMATTER_KEYS = {"title", "date", "time", "source", "attendees"}
 SPEAKER_TAG_RE = re.compile(r"<v\s+([^>]+)>")
 SOURCE_BY_EXT = {".vtt": "teams", ".docx": "teams"}
+# "Mara Stone 0 minutes 5 seconds" — the per-chunk stamp line of a Teams transcript-panel copy.
+# The panel also prints "0 minutes 5 seconds0:05" (no name, clock suffix), which must not match.
+TEAMS_STAMP_RE = re.compile(r"^(?P<name>\S.*?) (?P<min>\d+) minutes? (?P<sec>\d+) seconds?$")
+TEAMS_MIN_STAMPS = 2
 
 
 @dataclass
@@ -100,6 +108,41 @@ def _read_docx(path: Path) -> str:
     return "\n".join(p.text for p in docx.Document(str(path)).paragraphs if p.text.strip())
 
 
+def parse_teams_copy(text: str) -> tuple[list[str], str] | None:
+    """Reduce a Teams transcript-panel copy to (speakers in order of first appearance,
+    "Name: utterance" lines). Returns None when the text does not have that shape.
+
+    Only the line after a stamp line is kept; initials, bare names, duration lines, the
+    "AI-generated content" banner, private-use glyphs, and started/stopped notices are dropped.
+    Consecutive chunks from the same speaker merge into one line.
+    """
+    lines = text.splitlines()
+    speakers: list[str] = []
+    turns: list[list[str]] = []  # [speaker, text]
+    stamps = 0
+    i = 0
+    while i < len(lines):
+        m = TEAMS_STAMP_RE.match(lines[i].strip())
+        if not m:
+            i += 1
+            continue
+        stamps += 1
+        name = m.group("name")
+        utterance = lines[i + 1].strip() if i + 1 < len(lines) else ""
+        i += 2
+        if name not in speakers:
+            speakers.append(name)
+        if not utterance:
+            continue
+        if turns and turns[-1][0] == name:
+            turns[-1][1] += " " + utterance
+        else:
+            turns.append([name, utterance])
+    if stamps < TEAMS_MIN_STAMPS:
+        return None
+    return speakers, "\n".join(f"{who}: {what}" for who, what in turns) + "\n"
+
+
 def read_transcript(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix == ".vtt":
@@ -120,6 +163,10 @@ def normalize(path: Path) -> tuple[Meta, str]:
     path = Path(path)
     meta = parse_filename(path.name)
     fm, body = parse_frontmatter(read_transcript(path))
+    teams = parse_teams_copy(body) if path.suffix.lower() == ".txt" else None
+    if teams:
+        meta.attendees, body = teams
+        meta.source = "teams"
     if "title" in fm:
         meta.title = fm["title"]
     if "date" in fm:

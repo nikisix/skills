@@ -17,7 +17,11 @@ Rules:
 - `open_questions`: raised and unanswered.
 - `source_quality`: `verbatim` for a real transcript, `captions` for live captions, `notes` for notes.
 - Use the metadata header for `title`, `date`, `source`, and `attendees` unless the transcript clearly
-  contradicts it. Add attendees who speak in the transcript if they are in the roster.
+  contradicts it. Header attendees may be full names ("Abhi Gurudwar"): map each to its roster name
+  when the first name is on the roster, otherwise keep the full name as written. Add attendees who
+  speak in the transcript if they are in the roster.
+- A `source: teams` transcript is `verbatim` even though Teams labels it "AI-generated"; a `.txt`
+  pasted from Slack side-by-side captions is `captions`.
 
 JSON schema:
 {{SCHEMA}}

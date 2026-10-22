@@ -44,7 +44,11 @@ class People:
             return self.aliases[key]
         # 'j t' (from 'J.T.') -> 'jt'
         compact = key.replace(" ", "")
-        return self.aliases.get(compact)
+        if compact in self.aliases:
+            return self.aliases[compact]
+        # 'abhi gurudwar' (Teams full name) -> first name only
+        first = key.split()[0]
+        return self.aliases.get(first) if first != key else None
 
     def is_me(self, name: str | None) -> bool:
         return self.resolve(name) == self.me
