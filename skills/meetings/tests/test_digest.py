@@ -141,3 +141,19 @@ def test_cli_claude_crash_returns_1(org_dir, tmp_path, monkeypatch):
 
 def test_cli_usage_error_exits_1():
     assert digest.main(["--bogus"]) == 1
+
+
+def test_chat_prompt_lists_open_items(org_dir):
+    people = People.load(org_dir / "meetings" / "people.yaml")
+    header = "title: Slack #tron\ndate: 2026-10-21\ntime: \nsource: slack\nkind: chat\nattendees: Nick, Rob\nkey: k\n"
+    prompt = digest.build_prompt(header, "Rob: can you fix the proof diff?\n", people, open_items=["Align on Jira buckets"])
+    assert "Align on Jira buckets" in prompt and "{{" not in prompt
+    assert "already tracked" in prompt.lower()
+    meeting = digest.build_prompt(header.replace("kind: chat", "kind: meeting"), "x", people, open_items=["Align on Jira buckets"])
+    assert "already tracked" not in meeting.lower()
+
+
+def test_pin_to_header_sets_kind():
+    d = json.loads((FIX / "digest-good.json").read_text())
+    out = digest.pin_to_header(d, "title: X\ndate: 2026-10-20\nsource: slack\nkind: chat\nkey: k\n")
+    assert out["kind"] == "chat" and digest.validate(out) == []

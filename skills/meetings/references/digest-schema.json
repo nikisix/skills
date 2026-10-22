@@ -189,6 +189,14 @@
     "key": {
       "type": "string",
       "description": "Set by digest.py: the normalized transcript key."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "meeting",
+        "chat"
+      ],
+      "description": "Set by digest.py from the header."
     }
   }
 }

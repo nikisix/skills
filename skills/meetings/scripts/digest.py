@@ -21,6 +21,7 @@ from people import People
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = SKILL_DIR / "references" / "digest-schema.json"
 PROMPT_PATH = SKILL_DIR / "references" / "digest-prompt.md"
+CHAT_PROMPT_PATH = SKILL_DIR / "references" / "chat-prompt.md"
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 
 
@@ -67,10 +68,15 @@ def extract_json(text: str) -> dict:
     raise ValueError("no JSON object found in model output")
 
 
-def build_prompt(header: str, body: str, people: People) -> str:
-    template = PROMPT_PATH.read_text()
+def build_prompt(header: str, body: str, people: People, open_items: list[str] | None = None) -> str:
+    """Meeting prompt, or the chat prompt (with the open work items to dedupe against) when the
+    header says `kind: chat`."""
+    chat = header_fields(header).get("kind") == "chat"
+    template = (CHAT_PROMPT_PATH if chat else PROMPT_PATH).read_text()
+    items = "\n".join(f"- {i}" for i in (open_items or [])) or "- (none)"
     return (
-        template.replace("{{ME}}", people.me)
+        template.replace("{{OPEN_ITEMS}}", items)
+        .replace("{{ME}}", people.me)
         .replace("{{ROSTER}}", ", ".join(people.canonical_names))
         .replace("{{SCHEMA}}", SCHEMA_PATH.read_text().strip())
         .replace("{{HEADER}}", header.strip())
@@ -127,15 +133,23 @@ def pin_to_header(data: dict, header: str) -> dict:
         data["source"] = h["source"]
     if h.get("key"):
         data["key"] = h["key"]
+    if h.get("kind") in ("meeting", "chat"):
+        data["kind"] = h["kind"]
     for fu in data.get("follow_ups") or []:
         if fu.get("when") and fu["when"] < data["date"]:
             fu["when"] = None
     return data
 
 
-def digest_file(src: Path, out: Path, people: People) -> int:
+def open_work_items(paths) -> list[str]:
+    from arxiv_scan import collect_work_items
+
+    return collect_work_items(paths)
+
+
+def digest_file(src: Path, out: Path, people: People, open_items: list[str] | None = None) -> int:
     header, body = split_normalized(src.read_text(encoding="utf-8"))
-    prompt = build_prompt(header, body, people)
+    prompt = build_prompt(header, body, people, open_items)
     raw, data = "", {}
     for attempt in range(2):
         try:
@@ -186,7 +200,9 @@ def main(argv: list[str] | None = None) -> int:
     if not args.file or not args.out:
         ap.error("need <normalized.txt> and -o <out.json>")
     paths = paths_from_args(args)
-    return digest_file(args.file, args.out, People.load(paths.people_file))
+    header = split_normalized(args.file.read_text(encoding="utf-8"))[0]
+    items = open_work_items(paths) if header_fields(header).get("kind") == "chat" else None
+    return digest_file(args.file, args.out, People.load(paths.people_file), items)
 
 
 if __name__ == "__main__":

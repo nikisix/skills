@@ -125,7 +125,8 @@ def meeting_children(d: dict, people: People) -> list[str]:
 
 
 def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> list[str]:
-    head = [f"** {org_text(d['title'])} :meeting:auto:"] if new_heading else []
+    tag = "chat" if d.get("kind") == "chat" else "meeting"
+    head = [f"** {org_text(d['title'])} :{tag}:auto:"] if new_heading else []
     return head + meeting_body(d, people, now) + meeting_children(d, people)
 
 

@@ -109,3 +109,13 @@ def test_teams_stamp_with_hours():
     meta, body = normalize(FIX / "2026-10-22--multi-loc-extracts.txt")
     assert "Mara Stone 1 hour" not in meta.attendees and len(meta.attendees) == 4
     assert "One more thing after the hour." in body
+
+
+def test_kind_chat_round_trips(tmp_path):
+    p = tmp_path / "2026-10-21-slack-tron.txt"
+    p.write_text("title: Slack #tron\nsource: slack\nkind: chat\nattendees: Nick, Rob\n\nRob: can you look at the proof diff?\n")
+    meta, body = normalize(p)
+    assert meta.kind == "chat" and meta.source == "slack"
+    assert "kind: chat\n" in meta.header()
+    meta2, _ = normalize(FIX / "2026-10-20-rob-1-1.txt")
+    assert meta2.kind == "meeting" and "kind: meeting\n" in meta2.header()

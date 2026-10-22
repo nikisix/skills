@@ -145,3 +145,10 @@ def test_render_sanitizes_multiline_strings(org_dir):
     assert "   - Line one. * TODO injected top-level - bullet" in lines
     assert any(l.startswith("*** TODO do the thing - @Nick") for l in lines)
     assert not any(l.startswith("* ") or l == "- bullet" for l in lines)
+
+
+def test_chat_block_tag(org_dir):
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["kind"], d["title"] = "chat", "Slack #tron"
+    lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
+    assert lines[0] == "** Slack #tron :chat:auto:"

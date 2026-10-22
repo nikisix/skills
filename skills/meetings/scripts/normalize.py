@@ -19,7 +19,8 @@ from datetime import date
 from pathlib import Path
 
 FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d{2})(\d{2}))?-+(.+)$")
-FRONTMATTER_KEYS = {"title", "date", "time", "source", "attendees"}
+FRONTMATTER_KEYS = {"title", "date", "time", "source", "attendees", "kind"}
+KINDS = ("meeting", "chat")
 SPEAKER_TAG_RE = re.compile(r"<v\s+([^>]+)>")
 ANY_TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")  # Teams VTTs close every cue with </v>
 SOURCE_BY_EXT = {".vtt": "teams", ".docx": "teams"}
@@ -38,6 +39,7 @@ class Meta:
     attendees: list[str] = field(default_factory=list)
     stem: str = ""
     key: str = ""
+    kind: str = "meeting"  # "meeting" (transcript) or "chat" (a day of Slack messages)
 
     def header(self) -> str:
         return (
@@ -45,6 +47,7 @@ class Meta:
             f"date: {self.date.isoformat()}\n"
             f"time: {self.time or ''}\n"
             f"source: {self.source}\n"
+            f"kind: {self.kind}\n"
             f"attendees: {', '.join(self.attendees)}\n"
             f"key: {self.key}\n"
         )
@@ -178,6 +181,8 @@ def normalize(path: Path) -> tuple[Meta, str]:
         meta.source = fm["source"]
     if "attendees" in fm:
         meta.attendees = [a.strip() for a in fm["attendees"].split(",") if a.strip()]
+    if fm.get("kind") in KINDS:
+        meta.kind = fm["kind"]
     body = clean_body(body)
     meta.key = hashlib.sha256(body.encode("utf-8")).hexdigest()
     return meta, body
