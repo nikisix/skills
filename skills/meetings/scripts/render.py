@@ -107,10 +107,11 @@ def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> 
     return lines
 
 
-def followup_item(fu: dict, d: dict, people: People) -> list[str]:
+def followup_item(fu: dict, d: dict, people: People, link_file: str = "worklog.org") -> list[str]:
+    """`d['title']` should be the heading the meeting actually landed under, so the backlink resolves."""
     when = date.fromisoformat(fu["when"])
     return [
         f"** TODO {fu['text']} - @{people.me} :auto:",
         f"   SCHEDULED: {org_date(when)}",
-        f"   - from: [[file:worklog.org::*{d['title']}][{d['date']} {d['title']}]]",
+        f"   - from: [[file:{link_file}::*{d['title']}][{d['date']} {d['title']}]]",
     ]
