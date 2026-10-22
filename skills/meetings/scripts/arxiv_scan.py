@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
-from config import Paths, add_org_dir_arg, paths_from_args
+from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from digest import SKILL_DIR, extract_json, run_claude
 from orgfile import Heading, OrgDoc, org_text
 from state import State
@@ -27,6 +27,7 @@ GATE_PROMPT = SKILL_DIR / "references" / "arxiv-gate-prompt.md"
 TRON_SECTIONS = ("In Progress", "To Do")
 OPEN_KEYWORDS = ("TODO", "INPROGRESS")
 FIRST_RUN_DAYS = 30
+GATE_BATCH = 40  # papers per claude -p call; keeps the prompt well inside context
 CS_CATEGORIES = ("cs.CL", "cs.AI", "cs.IR", "cs.LG", "cs.CV", "cs.SE", "cs.DB", "cs.HC")
 EXIT_NOTHING = 2
 _ORG_LINK = re.compile(r"\[\[([^\]]+?)\](?:\[([^\]]+)\])?\]")
@@ -128,21 +129,28 @@ def search(query: str, since: date, max_results: int = 20) -> list[Paper]:
 
 
 def gate(items: list[str], papers: list[Paper], run: Callable[[str], str] = run_claude) -> list[Hit]:
+    """Relevance gate in batches of GATE_BATCH papers; a failed batch is logged and skipped."""
     if not papers or not items:
         return []
-    by_id = {p.id: p for p in papers}
-    listing = "\n\n".join(f"[{p.id}] {p.title}\n{p.abstract[:1200]}" for p in papers)
-    prompt = (
-        GATE_PROMPT.read_text()
-        .replace("{{ITEMS}}", "\n".join(f"- {i}" for i in items))
-        .replace("{{PAPERS}}", listing)
-    )
-    data = extract_json(run(prompt))
-    hits = []
-    for h in data.get("hits") or []:
-        p = by_id.get(str(h.get("id", "")).strip())
-        if p and h.get("item") in items:
-            hits.append(Hit(p, h["item"], str(h.get("why", "")).strip()))
+    hits: list[Hit] = []
+    for start in range(0, len(papers), GATE_BATCH):
+        batch = papers[start : start + GATE_BATCH]
+        by_id = {p.id: p for p in batch}
+        listing = "\n\n".join(f"[{p.id}] {p.title}\n{p.abstract[:1200]}" for p in batch)
+        prompt = (
+            GATE_PROMPT.read_text()
+            .replace("{{ITEMS}}", "\n".join(f"- {i}" for i in items))
+            .replace("{{PAPERS}}", listing)
+        )
+        try:
+            data = extract_json(run(prompt))
+        except (RuntimeError, ValueError) as exc:
+            print(f"gate batch {start // GATE_BATCH + 1} failed: {exc}", file=sys.stderr)
+            continue
+        for h in data.get("hits") or []:
+            p = by_id.get(str(h.get("id", "")).strip())
+            if p and h.get("item") in items:
+                hits.append(Hit(p, h["item"], str(h.get("why", "")).strip()))
     return hits
 
 
@@ -196,6 +204,8 @@ def scan(paths: Paths, state: State, since: date, today: date, dry_run: bool = F
         print("no open work items", file=sys.stderr)
         return 0
     queries = queries_for(items, state)
+    if not dry_run:
+        state.save()  # cached queries survive a gate failure
     papers: dict[str, Paper] = {}
     for item, qs in queries.items():
         for q in qs:
@@ -216,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--since", type=date.fromisoformat, default=None)
     ap.add_argument("--dry-run", action="store_true")
     add_org_dir_arg(ap)
-    args = ap.parse_args(argv)
+    args = parse_args_or_none(ap, argv)
+    if args is None:
+        return 1
     paths = paths_from_args(args)
     state = State.load(paths.state_file)
     today = date.today()

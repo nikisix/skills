@@ -185,6 +185,10 @@
           "type": "string"
         }
       }
+    },
+    "key": {
+      "type": "string",
+      "description": "Set by digest.py: the normalized transcript key."
     }
   }
 }

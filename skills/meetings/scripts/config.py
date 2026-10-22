@@ -78,3 +78,14 @@ def add_org_dir_arg(parser) -> None:
         default=None,
         help="org root (default: $MEETINGS_ORG_DIR or ~/org/ringmaster)",
     )
+
+
+def parse_args_or_none(parser, argv):
+    """argparse exits 2 on a usage error, which the orchestrator reads as 'nothing to do'.
+    Return None instead so main() can return 1. --help (exit 0) still exits."""
+    try:
+        return parser.parse_args(argv)
+    except SystemExit as exc:
+        if exc.code == 0:
+            raise
+        return None

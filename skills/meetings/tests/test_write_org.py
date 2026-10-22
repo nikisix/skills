@@ -193,3 +193,7 @@ def test_last_month_day_still_in_worklog(org):
     # November 2 with October still in worklog.org: October meetings stay in worklog.org
     assert write_org.target_file(paths, date(2026, 10, 30), date(2026, 11, 2)) == paths.worklog
     assert write_org.target_file(paths, date(2026, 9, 15), date(2026, 11, 2)) == org / "2026" / "2026-09-worklog.org"
+
+
+def test_cli_usage_error_exits_1():
+    assert write_org.main(["--bogus"]) == 1  # argparse's 2 would read as "nothing to do"

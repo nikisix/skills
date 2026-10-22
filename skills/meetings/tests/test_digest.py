@@ -115,3 +115,29 @@ def test_schema_rejects_newlines_in_text():
     d = json.loads((FIX / "digest-good.json").read_text())
     d["summary"] = "one\n* two"
     assert any("summary" in e for e in dg.validate(d))
+
+
+def test_digest_date_source_from_header(org_dir, tmp_path, monkeypatch):
+    good = json.loads((FIX / "digest-good.json").read_text())
+    good["date"], good["source"] = "2026-10-19", "manual"  # model drifted from the header
+    good["follow_ups"].append({"text": "earlier than the meeting", "with": ["Rob"], "when": "2025-01-01"})
+    monkeypatch.setattr(digest, "run_claude", lambda prompt, timeout=300: json.dumps(good))
+    out = tmp_path / "d.json"
+    assert digest.main([str(_normalized(tmp_path)), "-o", str(out)]) == 0
+    d = json.loads(out.read_text())
+    assert d["date"] == "2026-10-20" and d["source"] == "slack" and d["key"] == "abc"
+    assert d["follow_ups"][-1]["when"] is None  # a follow-up cannot precede the meeting
+
+
+def test_cli_claude_crash_returns_1(org_dir, tmp_path, monkeypatch):
+    def boom(prompt, timeout=300):
+        raise RuntimeError("claude exited 1: boom")
+
+    monkeypatch.setattr(digest, "run_claude", boom)
+    out = tmp_path / "d.json"
+    assert digest.main([str(_normalized(tmp_path)), "-o", str(out)]) == 1
+    assert "boom" in (tmp_path / "d.raw.txt").read_text()
+
+
+def test_cli_usage_error_exits_1():
+    assert digest.main(["--bogus"]) == 1

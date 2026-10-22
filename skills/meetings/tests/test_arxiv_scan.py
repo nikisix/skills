@@ -97,3 +97,19 @@ def test_build_query_ands_terms_within_cs():
 def test_hit_title_newline():
     p = Paper("2610.1", "Title split\n  across lines", "a", "https://arxiv.org/abs/2610.1", date(2026, 10, 1))
     assert arxiv_scan.render_hit(Hit(p, "item", "why\nnot"))[0] == "** Title split across lines — relevant to: item :auto:"
+
+
+def test_gate_batches_and_survives_failure():
+    papers = [Paper(f"2610.{i:05d}", f"T{i}", "a", f"https://arxiv.org/abs/2610.{i:05d}", date(2026, 10, 1)) for i in range(90)]
+    calls = []
+
+    def run_claude(prompt):
+        calls.append(prompt)
+        if len(calls) == 1:
+            raise RuntimeError("context overflow")
+        ids = [p.id for p in papers if f"[{p.id}]" in prompt]
+        return json.dumps({"hits": [{"id": ids[0], "item": "Accuracy dashboard", "why": "w"}]})
+
+    hits = arxiv_scan.gate(["Accuracy dashboard"], papers, run_claude)
+    assert len(calls) == 3  # 40 + 40 + 10
+    assert [h.paper.id for h in hits] == ["2610.00040", "2610.00080"]

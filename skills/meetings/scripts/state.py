@@ -35,6 +35,16 @@ class State:
         )
 
     def save(self) -> None:
+        """Merge with whatever is on disk now: two jobs (daily, arXiv) may hold the file at once.
+        Dicts and sets union (mine wins on a key), scalars take mine when set."""
+        if self.path.exists():
+            other = State.load(self.path)
+            self.processed = {**other.processed, **self.processed}
+            self.fetched = {**other.fetched, **self.fetched}
+            self.arxiv_seen |= other.arxiv_seen
+            self.arxiv_queries = {**other.arxiv_queries, **self.arxiv_queries}
+            self.last_teams_poll = self.last_teams_poll or other.last_teams_poll
+            self.last_arxiv_run = self.last_arxiv_run or other.last_arxiv_run
         data = {
             "processed": self.processed,
             "fetched": self.fetched,

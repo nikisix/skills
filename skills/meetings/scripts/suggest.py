@@ -14,7 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-from config import Paths, add_org_dir_arg, paths_from_args
+from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from orgfile import Heading, OrgDoc, org_text
 from people import People
 
@@ -98,7 +98,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("digest", type=Path)
     ap.add_argument("--dry-run", action="store_true")
     add_org_dir_arg(ap)
-    args = ap.parse_args(argv)
+    args = parse_args_or_none(ap, argv)
+    if args is None:
+        return 1
     paths = paths_from_args(args)
     digest = json.loads(args.digest.read_text(encoding="utf-8"))
     n = suggest(digest, paths, People.load(paths.people_file), dry_run=args.dry_run)

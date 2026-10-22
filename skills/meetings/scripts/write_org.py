@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from config import Paths, add_org_dir_arg, paths_from_args
+from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from orgfile import OrgDoc
 from people import People
 from render import followup_item, match_heading, meeting_block, meeting_body, meeting_children
@@ -189,7 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--now", type=datetime.fromisoformat, default=None)
     ap.add_argument("--today", type=date.fromisoformat, default=None)
     add_org_dir_arg(ap)
-    args = ap.parse_args(argv)
+    args = parse_args_or_none(ap, argv)
+    if args is None:
+        return 1
     paths = paths_from_args(args)
     now = args.now or datetime.now()
     digest = json.loads(args.digest.read_text(encoding="utf-8"))

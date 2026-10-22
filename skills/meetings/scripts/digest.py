@@ -8,19 +8,20 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import jsonschema
 
-from config import add_org_dir_arg, paths_from_args
+from config import add_org_dir_arg, parse_args_or_none, paths_from_args
 from people import People
 
 SKILL_DIR = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = SKILL_DIR / "references" / "digest-schema.json"
 PROMPT_PATH = SKILL_DIR / "references" / "digest-prompt.md"
-CLAUDE_BIN = "claude"
+CLAUDE_BIN = os.environ.get("CLAUDE_BIN", "claude")
 
 
 def load_schema() -> dict:
@@ -108,18 +109,48 @@ def split_normalized(text: str) -> tuple[str, str]:
     return header, body
 
 
+def header_fields(header: str) -> dict[str, str]:
+    out = {}
+    for line in header.splitlines():
+        k, sep, v = line.partition(":")
+        if sep:
+            out[k.strip().lower()] = v.strip()
+    return out
+
+
+def pin_to_header(data: dict, header: str) -> dict:
+    """The file, not the model, decides date/source/key; a follow-up cannot precede the meeting."""
+    h = header_fields(header)
+    if h.get("date"):
+        data["date"] = h["date"]
+    if h.get("source") in ("teams", "slack", "manual"):
+        data["source"] = h["source"]
+    if h.get("key"):
+        data["key"] = h["key"]
+    for fu in data.get("follow_ups") or []:
+        if fu.get("when") and fu["when"] < data["date"]:
+            fu["when"] = None
+    return data
+
+
 def digest_file(src: Path, out: Path, people: People) -> int:
     header, body = split_normalized(src.read_text(encoding="utf-8"))
     prompt = build_prompt(header, body, people)
     raw, data = "", {}
     for attempt in range(2):
-        raw = run_claude(prompt)
+        try:
+            raw = run_claude(prompt)
+        except (RuntimeError, subprocess.TimeoutExpired) as exc:
+            raw = f"claude call failed: {exc}"
+            print(raw, file=sys.stderr)
+            break
         try:
             data = extract_json(raw)
             errors = validate(data)
         except ValueError as exc:
             errors = [str(exc)]
         if not errors:
+            data = pin_to_header(data, header)
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             print(out)
@@ -144,7 +175,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("-o", "--out", type=Path)
     ap.add_argument("--validate-only", type=Path, metavar="DIGEST_JSON")
     add_org_dir_arg(ap)
-    args = ap.parse_args(argv)
+    args = parse_args_or_none(ap, argv)
+    if args is None:
+        return 1
     if args.validate_only:
         errors = validate(json.loads(args.validate_only.read_text()))
         for e in errors:

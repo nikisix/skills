@@ -27,6 +27,10 @@ digest_one() {
   log "normalize $name"
   if ! py normalize.py "$src" -o "$norm" >>"$LOG" 2>&1; then log "  normalize failed; left in inbox"; return 1; fi
   key="$(sed -n 's/^key: //p' "$norm" | head -1)"
+  if [ -s "$dig" ] && [ "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("key",""))' "$dig")" != "$key" ]; then
+    log "  digest on disk is for a different transcript; re-digesting"
+    rm -f "$dig"
+  fi
   if [ ! -s "$dig" ]; then
     log "  digest via claude -p"
     if ! py digest.py "$norm" -o "$dig" >>"$LOG" 2>&1; then log "  digest failed; left in inbox (see $MEET/digests/$stem.raw.txt)"; return 1; fi

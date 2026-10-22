@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from config import TIMEZONE, Paths, add_org_dir_arg, paths_from_args
+from config import TIMEZONE, Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from state import State
 
 M365_BIN = "m365"
@@ -103,7 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--since", type=datetime.fromisoformat, default=None)
     ap.add_argument("--dry-run", action="store_true")
     add_org_dir_arg(ap)
-    args = ap.parse_args(argv)
+    args = parse_args_or_none(ap, argv)
+    if args is None:
+        return 1
     paths = paths_from_args(args)
     state = State.load(paths.state_file)
     try:

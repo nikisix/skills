@@ -51,3 +51,19 @@ def test_resolve_full_name_by_first_name(org_dir):
     people = People.load(org_dir / "meetings" / "people.yaml")
     assert people.resolve("Abhi Gurudwar") == "Abhi"
     assert people.resolve("Mara Stone") is None
+
+
+def test_state_save_merges_concurrent_keys(org_dir):
+    from state import State
+
+    path = org_dir / "meetings" / "state.json"
+    a, b = State.load(path), State.load(path)
+    a.processed["w1"] = {"file": "x"}
+    a.last_teams_poll = "2026-10-22T06:30"
+    a.save()
+    b.arxiv_seen.add("2610.1")
+    b.last_arxiv_run = "2026-10-22"
+    b.save()  # must not clobber what `a` wrote in between
+    c = State.load(path)
+    assert c.processed == {"w1": {"file": "x"}} and c.last_teams_poll == "2026-10-22T06:30"
+    assert c.arxiv_seen == {"2610.1"} and c.last_arxiv_run == "2026-10-22"
