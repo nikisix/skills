@@ -136,3 +136,10 @@ def test_dry_run(org_dir, capsys):
     assert fetch_slack.fetch(paths, state, CFG, c, TODAY, dry_run=True) == []
     assert "2026-10-21-slack-tron.txt" in capsys.readouterr().out
     assert not paths.state_file.exists() and not list(paths.inbox.iterdir())
+
+
+def test_client_retries_rate_limits():
+    from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
+
+    c = fetch_slack.SlackClient("xoxp-test")
+    assert any(isinstance(h, RateLimitErrorRetryHandler) for h in c.c.retry_handlers)

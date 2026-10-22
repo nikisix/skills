@@ -70,8 +70,11 @@ class SlackClient:
 
     def __init__(self, tok: str):
         from slack_sdk import WebClient
+        from slack_sdk.http_retry.builtin_handlers import RateLimitErrorRetryHandler
 
         self.c = WebClient(token=tok)
+        # Tier 3 methods allow ~50/min; the first run bursts one history call per conversation-day.
+        self.c.retry_handlers.append(RateLimitErrorRetryHandler(max_retry_count=3))
         self._names: dict[str, str] = {}
 
     def me(self) -> str:
