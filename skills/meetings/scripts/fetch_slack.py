@@ -155,13 +155,22 @@ def _human(m: dict) -> bool:
     return m.get("type") == "message" and m.get("subtype") not in SKIP_SUBTYPES and bool(m.get("user")) and bool(m.get("text", "").strip())
 
 
-def render_day(messages: list[dict], channel: str, client) -> tuple[list[str], str]:
-    """(speakers in order of first appearance, 'Name: text' lines). Thread replies inside the window
-    follow their parent as 'Name (thread): text'."""
+THREAD_LOOKBACK_DAYS = 7
+
+
+def _in(window: tuple[float, float], m: dict) -> bool:
+    return window[0] <= float(m["ts"]) < window[1]
+
+
+def render_day(messages: list[dict], channel: str, client, window: tuple[float, float],
+               earlier: list[dict] | None = None) -> tuple[list[str], str]:
+    """(speakers in order of first appearance, 'Name: text' lines) for one local day.
+
+    Replies anywhere inside the day's window follow their parent as 'Name (thread): text'. Replies
+    today to a thread whose parent is in `earlier` (a lookback of history before the window) are
+    emitted as 'Name (thread, re: <parent>): text' so long-running threads are not lost."""
     speakers: list[str] = []
     lines: list[str] = []
-    oldest = min((float(m["ts"]) for m in messages), default=0.0)
-    latest = max((float(m["ts"]) for m in messages), default=0.0) + 1
 
     def emit(m: dict, suffix: str = "") -> None:
         name = client.user_name(m["user"])
@@ -169,16 +178,28 @@ def render_day(messages: list[dict], channel: str, client) -> tuple[list[str], s
             speakers.append(name)
         lines.append(f"{name}{suffix}: {clean_text(m['text'], client)}")
 
+    def thread_replies(parent: dict):
+        for r in client.replies(channel, parent["ts"]):
+            if r["ts"] != parent["ts"] and _human(r) and _in(window, r):
+                yield r
+
     for m in sorted(messages, key=lambda x: float(x["ts"])):
         if not _human(m):
             continue
         if m.get("thread_ts") and m["thread_ts"] != m["ts"]:
-            continue  # a reply surfaced in history (broadcast); it is emitted under its parent
+            continue  # a broadcast reply: emitted under its parent (today's or an earlier day's)
         emit(m)
         if m.get("reply_count") and m.get("thread_ts") == m["ts"]:
-            for r in client.replies(channel, m["ts"]):
-                if r["ts"] != m["ts"] and _human(r) and oldest <= float(r["ts"]) < latest:
-                    emit(r, " (thread)")
+            for r in thread_replies(m):
+                emit(r, " (thread)")
+    for parent in sorted(earlier or [], key=lambda x: float(x["ts"])):
+        if not (_human(parent) and parent.get("reply_count") and parent.get("latest_reply")):
+            continue
+        if float(parent["latest_reply"]) < window[0]:
+            continue
+        topic = clean_text(parent["text"], client)[:60]
+        for r in thread_replies(parent):
+            emit(r, f" (thread, re: {topic})")
     return speakers, "\n".join(lines) + ("\n" if lines else "")
 
 
@@ -193,36 +214,44 @@ def fetch(paths: Paths, state: State, cfg: SlackConfig, client, today: date, dry
     if first > last:
         return written
     days = [first + timedelta(days=i) for i in range((last - first).days + 1)]
+    failed_days: list[date] = []
     for conv in select_conversations(client.conversations(), cfg):
-        title = conversation_title(conv, client)
+        title: str | None = None
         for d in days:
             key = f"slack:{conv['id']}:{d.isoformat()}"
             if key in state.fetched:
                 continue
-            oldest, latest = day_window(d)
-            msgs = client.history(conv["id"], oldest, latest)
-            speakers, body = render_day(msgs, conv["id"], client)
-            n = body.count("\n")
-            name = f"{d.isoformat()}-{slug(title)}.txt"
-            if n < cfg.min_messages:
-                if not dry_run:
-                    state.fetched[key] = {"file": "", "name": title}
-                continue
-            first_ts = min(float(m["ts"]) for m in msgs if _human(m))
-            hhmm = datetime.fromtimestamp(first_ts, ZoneInfo(TIMEZONE)).strftime("%H:%M")
-            out = paths.inbox / name
-            text = (f"title: {title}\ndate: {d.isoformat()}\ntime: {hhmm}\nsource: slack\nkind: chat\n"
-                    f"attendees: {', '.join(speakers)}\n\n{body}")
-            if dry_run:
-                print(f"would write {out} ({n} messages)")
-                continue
-            out.parent.mkdir(parents=True, exist_ok=True)
-            out.write_text(text, encoding="utf-8")
-            state.fetched[key] = {"file": name, "name": title}
-            written.append(out)
-            print(out)
+            try:
+                window = day_window(d)
+                msgs = client.history(conv["id"], *window)
+                earlier = client.history(conv["id"], window[0] - THREAD_LOOKBACK_DAYS * 86400, window[0])
+                speakers, body = render_day(msgs, conv["id"], client, window, earlier=earlier)
+                n = body.count("\n")
+                if n < cfg.min_messages:
+                    continue  # not recorded: last_slack_poll gates the day once the run completes
+                title = title or conversation_title(conv, client)
+                name = f"{d.isoformat()}-{slug(title)}-{conv['id'].lower()}.txt"
+                stamps = [float(m["ts"]) for m in msgs if _human(m)]
+                hhmm = datetime.fromtimestamp(min(stamps), ZoneInfo(TIMEZONE)).strftime("%H:%M") if stamps else ""
+                out = paths.inbox / name
+                text = (f"title: {title}\ndate: {d.isoformat()}\ntime: {hhmm}\nsource: slack\nkind: chat\n"
+                        f"attendees: {', '.join(speakers)}\n\n{body}")
+                if dry_run:
+                    print(f"would write {out} ({n} messages)")
+                    continue
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_text(text, encoding="utf-8")
+                state.fetched[key] = {"file": name, "name": title}
+                state.save()  # per file: a later failure keeps what already landed
+                written.append(out)
+                print(out)
+            except Exception as exc:  # one bad conversation-day must not wedge the rest
+                print(f"slack {conv['id']} {d}: {exc}", file=sys.stderr)
+                failed_days.append(d)
     if not dry_run:
-        state.last_slack_poll = last.isoformat()
+        done_through = min(failed_days) - timedelta(days=1) if failed_days else last
+        if done_through >= first:
+            state.last_slack_poll = done_through.isoformat()
         state.save()
     return written
 

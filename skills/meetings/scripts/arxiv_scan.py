@@ -57,13 +57,15 @@ def _top_sections(doc: OrgDoc) -> list[tuple[int, str]]:
     return [(i, line[2:].strip()) for i, line in enumerate(doc.lines) if line.startswith("* ")]
 
 
-def collect_work_items(paths: Paths) -> list[str]:
+def collect_work_items(paths: Paths, include_children: bool = False) -> list[str]:
     """`**` titles under tron-tasks In Progress / To Do, plus worklog TODO/INPROGRESS day items and
-    everything under the worklog's `* TODO` section. Owners and links are stripped; order kept."""
+    everything under the worklog's `* TODO` section. Owners and links are stripped; order kept.
+    `include_children` also takes `***` TODO/INPROGRESS items under day headers (the action items
+    this pipeline itself landed), which the chat digest must dedupe against."""
     items: list[str] = []
 
-    def take(doc: OrgDoc, sec_idx: int, keywords: tuple[str, ...] | None) -> None:
-        for h in doc.headings(sec_idx, 2):
+    def take(doc: OrgDoc, sec_idx: int, keywords: tuple[str, ...] | None, level: int = 2) -> None:
+        for h in doc.headings(sec_idx, level):
             if keywords is None or h.keyword in keywords:
                 t = _clean_title(h.title)
                 if t and t not in items:
@@ -78,6 +80,8 @@ def collect_work_items(paths: Paths) -> list[str]:
         doc = OrgDoc.load(paths.worklog)
         for idx, _ in doc.day_headers():
             take(doc, idx, OPEN_KEYWORDS)
+            if include_children:
+                take(doc, idx, OPEN_KEYWORDS, level=3)
         for idx, name in _top_sections(doc):
             if name == "TODO":
                 take(doc, idx, None)

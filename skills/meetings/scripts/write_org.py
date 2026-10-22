@@ -120,7 +120,9 @@ def plan_writes(
     file = target_file(paths, d, today)
     doc = p.doc(file)
     day_idx = p.day(file, d)
-    match = match_heading(digest["title"], digest.get("attendees") or [], doc.headings(day_idx, 2), people)
+    # a chat day never merges into a hand-written heading: a DM with Rob is not the "Rob 1-1" notes
+    match = None if digest.get("kind") == "chat" else match_heading(
+        digest["title"], digest.get("attendees") or [], doc.headings(day_idx, 2), people)
     if match:
         # bullets go in the heading's own body (before any *** children I already wrote);
         # the *** items go at the end of the subtree

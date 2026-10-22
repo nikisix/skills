@@ -144,7 +144,7 @@ def pin_to_header(data: dict, header: str) -> dict:
 def open_work_items(paths) -> list[str]:
     from arxiv_scan import collect_work_items
 
-    return collect_work_items(paths)
+    return collect_work_items(paths, include_children=True)
 
 
 def digest_file(src: Path, out: Path, people: People, open_items: list[str] | None = None) -> int:

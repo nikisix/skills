@@ -2,3 +2,4 @@
 *.zip
 epic/
 .superpowers/
+__pycache__/

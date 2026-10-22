@@ -197,3 +197,12 @@ def test_last_month_day_still_in_worklog(org):
 
 def test_cli_usage_error_exits_1():
     assert write_org.main(["--bogus"]) == 1  # argparse's 2 would read as "nothing to do"
+
+
+def test_chat_never_merges_under_hand_written_heading(org):
+    d = _digest(title="Slack DM Rob", attendees=["Nick", "Rob"], kind="chat", follow_ups=[])
+    _run(org, d)
+    lines = (org / "worklog.org").read_text().splitlines()
+    assert "** Slack DM Rob :chat:auto:" in lines
+    i = lines.index("** Rob 1-1")
+    assert lines[i + 1] == "   - my own notes about accuracy" and not lines[i + 2].startswith("   - meetings (auto)")

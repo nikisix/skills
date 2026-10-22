@@ -157,3 +157,14 @@ def test_pin_to_header_sets_kind():
     d = json.loads((FIX / "digest-good.json").read_text())
     out = digest.pin_to_header(d, "title: X\ndate: 2026-10-20\nsource: slack\nkind: chat\nkey: k\n")
     assert out["kind"] == "chat" and digest.validate(out) == []
+
+
+def test_open_items_include_landed_auto_todos(org_dir):
+    (org_dir / "worklog.org").write_text(
+        "* <2026-10-21 Wed>\n\n** Slack #tron :chat:auto:\n   - meetings (auto) x\n"
+        "*** TODO Send Rob the DMP access creds - @Nick :auto:\n*** DONE old thing - @Nick :auto:\n"
+        "** TODO Follow up\n\n* TODO\n** Align on Jira buckets\n")
+    from config import Paths
+    items = digest.open_work_items(Paths(org_dir))
+    assert "Send Rob the DMP access creds" in items and "Follow up" in items and "Align on Jira buckets" in items
+    assert "old thing" not in items
