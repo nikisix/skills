@@ -21,10 +21,11 @@ from pathlib import Path
 FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d{2})(\d{2}))?-+(.+)$")
 FRONTMATTER_KEYS = {"title", "date", "time", "source", "attendees"}
 SPEAKER_TAG_RE = re.compile(r"<v\s+([^>]+)>")
+ANY_TAG_RE = re.compile(r"</?[A-Za-z][^>]*>")  # Teams VTTs close every cue with </v>
 SOURCE_BY_EXT = {".vtt": "teams", ".docx": "teams"}
 # "Mara Stone 0 minutes 5 seconds" — the per-chunk stamp line of a Teams transcript-panel copy.
 # The panel also prints "0 minutes 5 seconds0:05" (no name, clock suffix), which must not match.
-TEAMS_STAMP_RE = re.compile(r"^(?P<name>\S.*?) (?P<min>\d+) minutes? (?P<sec>\d+) seconds?$")
+TEAMS_STAMP_RE = re.compile(r"^(?P<name>\S.*?) (?:(?P<hr>\d+) hours? )?(?P<min>\d+) minutes? (?P<sec>\d+) seconds?$")
 TEAMS_MIN_STAMPS = 2
 
 
@@ -95,7 +96,7 @@ def _read_vtt(path: Path) -> str:
     for caption in webvtt.read(str(path)):
         raw = caption.raw_text.strip()
         m = SPEAKER_TAG_RE.search(raw)
-        text = SPEAKER_TAG_RE.sub("", raw).strip()
+        text = ANY_TAG_RE.sub("", raw).strip()
         line = f"{m.group(1).strip()}: {text}" if m else text
         if line and (not out or out[-1] != line):
             out.append(line)

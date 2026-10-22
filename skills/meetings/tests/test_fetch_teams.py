@@ -76,7 +76,8 @@ def test_second_run_window_starts_at_last_poll(org_dir, fake_m365):
     state.last_teams_poll = (NOW - timedelta(days=1)).isoformat()
     fetch_teams.fetch(paths, state, NOW)
     listing = next(c for c in fake_m365 if c[:3] == ["teams", "meeting", "list"])
-    assert listing[listing.index("--startDateTime") + 1] == (NOW - timedelta(days=1)).isoformat()
+    # two-day overlap: a meeting still running at the last poll had no transcript yet
+    assert listing[listing.index("--startDateTime") + 1] == (NOW - timedelta(days=3)).isoformat()
 
 
 def test_dry_run_downloads_nothing(org_dir, fake_m365, capsys):

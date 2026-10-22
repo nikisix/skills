@@ -97,10 +97,9 @@ def _item_lines(item: dict, people: People) -> list[str]:
     return lines
 
 
-def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> list[str]:
+def meeting_body(d: dict, people: People, now: datetime) -> list[str]:
+    """The bullet lines (marker, summary, decisions, open questions) that sit in a heading's own body."""
     lines: list[str] = []
-    if new_heading:
-        lines.append(f"** {org_text(d['title'])} :meeting:auto:")
     attendees = ", ".join(d.get("attendees") or [])
     lines.append(f"   - meetings (auto) {now.strftime('%Y-%m-%dT%H:%M')} · source: {d['source']} · attendees: {attendees}")
     lines.append(f"   - {org_text(d['summary'])}")
@@ -109,6 +108,12 @@ def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> 
         lines.append(f"   - Decided ({dec['firmness']}): {org_text(dec['text'])}{by}")
     for q in d.get("open_questions") or []:
         lines.append(f"   - Open: {org_text(q)}")
+    return lines
+
+
+def meeting_children(d: dict, people: People) -> list[str]:
+    """The *** items: action items and undated follow-ups."""
+    lines: list[str] = []
     for item in d.get("action_items") or []:
         lines.extend(_item_lines(item, people))
     for fu in d.get("follow_ups") or []:
@@ -117,6 +122,11 @@ def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> 
         lines.append(f"*** TODO {org_text(fu['text'])} - @{people.me} :auto:")
         lines.append("    - when: TBD")
     return lines
+
+
+def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> list[str]:
+    head = [f"** {org_text(d['title'])} :meeting:auto:"] if new_heading else []
+    return head + meeting_body(d, people, now) + meeting_children(d, people)
 
 
 def followup_item(fu: dict, d: dict, people: People, link_file: str = "worklog.org") -> list[str]:

@@ -88,7 +88,7 @@ def test_teams_copy_keeps_only_speaker_utterances():
     assert lines[1] == "Abhi Gurudwar: Good afternoon, everyone."
     # consecutive chunks from one speaker merge into one line
     assert lines[2] == "Mara Stone: I'll kick this off. We're going to go through the multi-line of coverage extracts."
-    assert lines[-1] == "Mara Stone: All right. Talk to you guys later."
+    assert lines[-1] == "Mara Stone: All right. Talk to you guys later. One more thing after the hour."
     for noise in ("transcription", "AI-generated", "0:05", "minutes", "\nMS\n", "\u00ee"):
         assert noise not in body
 
@@ -103,3 +103,9 @@ def test_plain_text_body_unchanged():
     meta, body = normalize(FIX / "2026-10-20-rob-1-1.txt")
     assert meta.source == "slack"
     assert body.startswith("Rob: How's the accuracy work going?")
+
+
+def test_teams_stamp_with_hours():
+    meta, body = normalize(FIX / "2026-10-22--multi-loc-extracts.txt")
+    assert "Mara Stone 1 hour" not in meta.attendees and len(meta.attendees) == 4
+    assert "One more thing after the hour." in body

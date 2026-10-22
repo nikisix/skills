@@ -175,3 +175,21 @@ def test_cli_writes_landing_into_digest_file(org, tmp_path):
     dj.write_text(json.dumps(_digest()))
     assert write_org.main([str(dj), "--key", "k1", "--now", NOW.isoformat(), "--today", TODAY.isoformat()]) == 0
     assert json.loads(dj.read_text())["landed"] == {"file": "worklog.org", "heading": "Rob 1-1"}
+
+
+def test_merge_bullets_precede_existing_children(org):
+    d = _digest(title="CSV Proofs", attendees=["Nick"], date="2026-10-21", follow_ups=[])
+    _run(org, d)
+    lines = (org / "worklog.org").read_text().splitlines()
+    h = lines.index("** CSV Proofs - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]")
+    marker = next(i for i, l in enumerate(lines) if l.startswith("   - meetings (auto)"))
+    done = lines.index("*** DONE incorporate Marcus' ontology edits")
+    todo = next(i for i, l in enumerate(lines) if l.startswith("*** TODO draft the CSV proofs runbook"))
+    assert h < marker < done < todo < lines.index("* TODO")
+
+
+def test_last_month_day_still_in_worklog(org):
+    paths = Paths(org)
+    # November 2 with October still in worklog.org: October meetings stay in worklog.org
+    assert write_org.target_file(paths, date(2026, 10, 30), date(2026, 11, 2)) == paths.worklog
+    assert write_org.target_file(paths, date(2026, 9, 15), date(2026, 11, 2)) == org / "2026" / "2026-09-worklog.org"

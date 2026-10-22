@@ -28,6 +28,7 @@ from state import State
 
 M365_BIN = "m365"
 FIRST_RUN_DAYS = 14
+OVERLAP_DAYS = 2  # a meeting still running at the last poll had no transcript yet; fetched keys dedup
 EXIT_NOTHING = 2
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
@@ -73,7 +74,7 @@ def inbox_name(meeting: dict) -> str:
 def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = None, dry_run: bool = False) -> list[Path]:
     """Download new transcripts into paths.inbox; returns the files written (none on dry run)."""
     if since is None:
-        since = datetime.fromisoformat(state.last_teams_poll) if state.last_teams_poll else now - timedelta(days=FIRST_RUN_DAYS)
+        since = (datetime.fromisoformat(state.last_teams_poll) - timedelta(days=OVERLAP_DAYS)) if state.last_teams_poll else now - timedelta(days=FIRST_RUN_DAYS)
     written: list[Path] = []
     for meeting in list_meetings(since, now):
         for i, t in enumerate(list_transcripts(meeting["id"])):

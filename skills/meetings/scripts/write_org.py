@@ -21,7 +21,7 @@ from pathlib import Path
 from config import Paths, add_org_dir_arg, paths_from_args
 from orgfile import OrgDoc
 from people import People
-from render import followup_item, match_heading, meeting_block
+from render import followup_item, match_heading, meeting_block, meeting_body, meeting_children
 from state import State
 
 GUARD_MINUTES = 15
@@ -42,15 +42,32 @@ class Write:
 
 
 def target_file(paths: Paths, d: date, today: date) -> Path:
-    """Current month or later -> worklog.org; an earlier month -> that month's archive file."""
+    """Current month or later -> worklog.org. An earlier month -> worklog.org while that month is still
+    in it (early-month runs land late transcripts), else that month's archive file."""
     if (d.year, d.month) >= (today.year, today.month):
         return paths.worklog
+    if paths.worklog.exists():
+        for _, dd in OrgDoc.load(paths.worklog).day_headers():
+            if (dd.year, dd.month) == (d.year, d.month):
+                return paths.worklog
     return paths.archive_for(d)
 
 
 def _append_point(doc: OrgDoc, idx: int) -> int:
     """Where to add children to the subtree at `idx`: its end, before any trailing blank lines."""
     end = doc.section_end(idx)
+    while end - 1 > idx and doc.lines[end - 1] == "":
+        end -= 1
+    return end
+
+
+def _body_end(doc: OrgDoc, idx: int) -> int:
+    """End of the heading's own body: just before its first child headline (or the subtree end)."""
+    end = doc.section_end(idx)
+    for j in range(idx + 1, end):
+        if doc.level_at(j):
+            end = j
+            break
     while end - 1 > idx and doc.lines[end - 1] == "":
         end -= 1
     return end
@@ -105,10 +122,16 @@ def plan_writes(
     day_idx = p.day(file, d)
     match = match_heading(digest["title"], digest.get("attendees") or [], doc.headings(day_idx, 2), people)
     if match:
-        heading_title, at = match.title, _append_point(doc, match.idx)
+        # bullets go in the heading's own body (before any *** children I already wrote);
+        # the *** items go at the end of the subtree
+        heading_title = match.title
+        p.add(file, _body_end(doc, match.idx), meeting_body(digest, people, now), f"{d.isoformat()}/{heading_title}")
+        children = meeting_children(digest, people)
+        if children:
+            p.add(file, _append_point(doc, match.idx), children, f"{d.isoformat()}/{heading_title}/items")
     else:
-        heading_title, at = digest["title"], _append_point(doc, day_idx)
-    p.add(file, at, meeting_block(digest, people, now, new_heading=match is None), f"{d.isoformat()}/{heading_title}")
+        heading_title = digest["title"]
+        p.add(file, _append_point(doc, day_idx), meeting_block(digest, people, now, new_heading=True), f"{d.isoformat()}/{heading_title}")
 
     link_file = str(file.relative_to(paths.org_dir))
     digest["landed"] = {"file": link_file, "heading": heading_title}  # for suggest.py's backlink
