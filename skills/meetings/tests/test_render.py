@@ -80,9 +80,13 @@ def test_jira_link_placement(org_dir):
 
 def test_unresolved_owner(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
-    d["action_items"] = [{"text": "ping legal", "owner": "Zelda", "due": None, "jira": None, "ticket_worthy": False}]
+    d["action_items"] = [
+        {"text": "ping legal", "owner": "Mitch Slavens", "due": None, "jira": None, "ticket_worthy": False},
+        {"text": "find an owner", "owner": None, "due": None, "jira": None, "ticket_worthy": False},
+    ]
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
-    assert "*** ping legal - @? :auto:" in lines
+    assert "*** ping legal - @Mitch Slavens :auto:" in lines  # named but off-roster: keep the name
+    assert "*** find an owner - @? :auto:" in lines  # nobody named: a finding
 
 
 def test_followup_item_shape(org_dir):

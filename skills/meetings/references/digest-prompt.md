@@ -2,8 +2,10 @@ You are extracting a structured digest from a meeting transcript. Output ONLY on
 validates against the schema below. No prose before or after it, no markdown fence.
 
 The person reading this digest is {{ME}}. The roster of known people is: {{ROSTER}}.
-For `owner`, `by`, `attendees`, and `with`, use a roster name exactly as written, or `null` for an
-owner you cannot resolve to the roster. Never invent names, dates, or commitments.
+For `owner`, `by`, `attendees`, and `with`, use a roster name exactly as written. A person who is
+not on the roster but is named in the header or speaks in the transcript is written with their name
+exactly as it appears there (e.g. "Mitch Slavens"). Use `null` only when nobody was named.
+Never invent names, dates, or commitments.
 
 Rules:
 - `summary`: 1–3 sentences on the objective and outcome.

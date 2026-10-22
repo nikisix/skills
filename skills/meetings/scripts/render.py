@@ -66,8 +66,9 @@ def match_heading(title: str, attendees: list[str], headings: list[Heading], peo
 
 
 def _owner_suffix(owner: str | None, people: People) -> str:
+    """@Roster name; an off-roster but named owner keeps the name as given; nobody named -> @?."""
     canonical = people.resolve(owner) if owner else None
-    return f" - @{canonical or '?'}"
+    return f" - @{canonical or owner or '?'}"
 
 
 def _jira_suffix(key: str | None) -> str:
