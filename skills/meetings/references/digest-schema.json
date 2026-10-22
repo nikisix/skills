@@ -4,23 +4,74 @@
   "title": "Meeting digest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["title", "date", "source", "attendees", "summary", "decisions", "action_items", "follow_ups", "open_questions", "source_quality"],
+  "required": [
+    "title",
+    "date",
+    "source",
+    "attendees",
+    "summary",
+    "decisions",
+    "action_items",
+    "follow_ups",
+    "open_questions",
+    "source_quality"
+  ],
   "properties": {
-    "title": {"type": "string", "minLength": 1},
-    "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
-    "source": {"type": "string", "enum": ["teams", "slack", "manual"]},
-    "attendees": {"type": "array", "items": {"type": "string"}},
-    "summary": {"type": "string", "minLength": 1},
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "date": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "teams",
+        "slack",
+        "manual"
+      ]
+    },
+    "attendees": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
     "decisions": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["text", "firmness", "by"],
+        "required": [
+          "text",
+          "firmness",
+          "by"
+        ],
         "properties": {
-          "text": {"type": "string", "minLength": 1},
-          "firmness": {"type": "string", "enum": ["committed", "leaning", "discussed"]},
-          "by": {"type": ["string", "null"]}
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "firmness": {
+            "type": "string",
+            "enum": [
+              "committed",
+              "leaning",
+              "discussed"
+            ]
+          },
+          "by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
@@ -29,13 +80,41 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["text", "owner", "due", "jira", "ticket_worthy"],
+        "required": [
+          "text",
+          "owner",
+          "due",
+          "jira",
+          "ticket_worthy"
+        ],
         "properties": {
-          "text": {"type": "string", "minLength": 1},
-          "owner": {"type": ["string", "null"]},
-          "due": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
-          "jira": {"type": ["string", "null"], "pattern": "^DEV-\\d+$"},
-          "ticket_worthy": {"type": "boolean"}
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "owner": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "due": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "jira": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^DEV-\\d+$"
+          },
+          "ticket_worthy": {
+            "type": "boolean"
+          }
         }
       }
     },
@@ -44,15 +123,62 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["text", "with", "when"],
+        "required": [
+          "text",
+          "with",
+          "when"
+        ],
         "properties": {
-          "text": {"type": "string", "minLength": 1},
-          "with": {"type": "array", "items": {"type": "string"}},
-          "when": {"type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}
+          "text": {
+            "type": "string",
+            "minLength": 1
+          },
+          "with": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "when": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          }
         }
       }
     },
-    "open_questions": {"type": "array", "items": {"type": "string"}},
-    "source_quality": {"type": "string", "enum": ["verbatim", "captions", "notes"]}
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_quality": {
+      "type": "string",
+      "enum": [
+        "verbatim",
+        "captions",
+        "notes"
+      ]
+    },
+    "landed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file",
+        "heading"
+      ],
+      "description": "Set by write_org.py after landing: where the block went.",
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "heading": {
+          "type": "string"
+        }
+      }
+    }
   }
 }

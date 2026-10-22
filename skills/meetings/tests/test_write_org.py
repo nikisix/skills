@@ -158,3 +158,20 @@ def test_cli_nothing_to_do_exits_2(org, tmp_path):
     args = [str(dj), "--key", "k1", "--now", NOW.isoformat(), "--today", TODAY.isoformat()]
     assert write_org.main(args) == 0
     assert write_org.main(args) == 2
+
+
+def test_plan_records_landing(org):
+    paths, people, _ = _setup(org)
+    d = _digest()
+    write_org.plan_writes(d, "k1", paths, people, NOW, today=TODAY)
+    assert d["landed"] == {"file": "worklog.org", "heading": "Rob 1-1"}
+    d2 = _digest(date="2026-09-15", title="Sept planning", attendees=["Nick"])
+    write_org.plan_writes(d2, "k2", paths, people, NOW, today=TODAY)
+    assert d2["landed"] == {"file": "2026/2026-09-worklog.org", "heading": "Sept planning"}
+
+
+def test_cli_writes_landing_into_digest_file(org, tmp_path):
+    dj = tmp_path / "d.json"
+    dj.write_text(json.dumps(_digest()))
+    assert write_org.main([str(dj), "--key", "k1", "--now", NOW.isoformat(), "--today", TODAY.isoformat()]) == 0
+    assert json.loads(dj.read_text())["landed"] == {"file": "worklog.org", "heading": "Rob 1-1"}

@@ -85,3 +85,10 @@ def test_append_hits_dry_run(org_dir, capsys):
     assert arxiv_scan.append_hits(paths, [Hit(PAPERS[0], "Accuracy dashboard", "why")], state, dry_run=True) == 1
     assert "Evaluating document extraction" in capsys.readouterr().out
     assert not paths.suggestions.exists() and not paths.state_file.exists()
+
+
+def test_build_query_ands_terms_within_cs():
+    q = arxiv_scan.build_query("document information extraction LLM")
+    assert q.startswith("all:document AND all:information AND all:extraction AND all:LLM AND (cat:cs.")
+    assert q.endswith(")")
+    assert "cat:cs.CL" in q and "cat:cs.IR" in q

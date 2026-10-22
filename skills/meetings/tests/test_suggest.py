@@ -84,3 +84,9 @@ def test_dry_run_writes_nothing(org_dir, tmp_path, capsys):
     assert suggest.main([str(_dj(tmp_path, _digest())), "--dry-run"]) == 0
     assert "** build a proof-diff tool" in capsys.readouterr().out
     assert not (org_dir / "suggested-tron-tasks.org").exists()
+
+
+def test_source_link_uses_landed_heading():
+    d = _digest(landed={"file": "2026/2026-09-worklog.org", "heading": "Rob 1-1"})
+    item = {"text": "x", "owner": "Nick", "due": None, "jira": None, "ticket_worthy": True}
+    assert suggest.render(item, d)[1] == "   - source: [[file:2026/2026-09-worklog.org::*Rob 1-1][2026-10-20 Rob 1-1]]"

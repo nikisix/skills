@@ -46,9 +46,11 @@ def candidates(digest: dict) -> list[dict]:
 def render(item: dict, digest: dict, people: People | None = None) -> list[str]:
     owner = (people.resolve(item.get("owner")) if people else None) or item.get("owner") or (people.me if people else "Nick")
     why = re.split(r"(?<=[.!?])\s", digest["summary"].strip(), maxsplit=1)[0]
+    landed = digest.get("landed") or {}
+    link_file, heading = landed.get("file", "worklog.org"), landed.get("heading", digest["title"])
     return [
         f"** {item['text']} - @{owner} :auto:",
-        f"   - source: [[file:worklog.org::*{digest['title']}][{digest['date']} {digest['title']}]]",
+        f"   - source: [[file:{link_file}::*{heading}][{digest['date']} {heading}]]",
         f"   - why: {why}",
     ]
 

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.ntomasino.meetings.arxiv</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>@SKILL_DIR@/scripts/run.sh</string>
+        <string>arxiv</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>@PATH@</string>
+        <key>HOME</key>
+        <string>@HOME@</string>
+        <key>MEETINGS_ORG_DIR</key>
+        <string>@ORG_DIR@</string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>0</integer></dict>
+    <key>StandardOutPath</key>
+    <string>@ORG_DIR@/meetings/logs/launchd.daily.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>@ORG_DIR@/meetings/logs/launchd.daily.err.log</string>
+</dict>
+</plist>

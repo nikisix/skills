@@ -27,6 +27,7 @@ GATE_PROMPT = SKILL_DIR / "references" / "arxiv-gate-prompt.md"
 TRON_SECTIONS = ("In Progress", "To Do")
 OPEN_KEYWORDS = ("TODO", "INPROGRESS")
 FIRST_RUN_DAYS = 30
+CS_CATEGORIES = ("cs.CL", "cs.AI", "cs.IR", "cs.LG", "cs.CV", "cs.SE", "cs.DB", "cs.HC")
 EXIT_NOTHING = 2
 _ORG_LINK = re.compile(r"\[\[([^\]]+?)\](?:\[([^\]]+)\])?\]")
 
@@ -105,11 +106,18 @@ def queries_for(items: list[str], state: State, run: Callable[[str], str] = run_
     return out
 
 
+def build_query(query: str) -> str:
+    """A bare multi-word query sorted by date matches any one word; AND the terms and stay in cs.*."""
+    terms = [t for t in re.split(r"\s+", query.strip()) if t]
+    cats = " OR ".join(f"cat:{c}" for c in CS_CATEGORIES)
+    return " AND ".join(f"all:{t}" for t in terms) + f" AND ({cats})"
+
+
 def search(query: str, since: date, max_results: int = 20) -> list[Paper]:
     import arxiv
 
     client = arxiv.Client()
-    s = arxiv.Search(query=query, max_results=max_results, sort_by=arxiv.SortCriterion.SubmittedDate)
+    s = arxiv.Search(query=build_query(query), max_results=max_results, sort_by=arxiv.SortCriterion.SubmittedDate)
     out = []
     for r in client.results(s):
         if r.published.date() < since:

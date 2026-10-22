@@ -111,6 +111,7 @@ def plan_writes(
     p.add(file, at, meeting_block(digest, people, now, new_heading=match is None), f"{d.isoformat()}/{heading_title}")
 
     link_file = str(file.relative_to(paths.org_dir))
+    digest["landed"] = {"file": link_file, "heading": heading_title}  # for suggest.py's backlink
     linked = {**digest, "title": heading_title}
     for i, fu in enumerate(digest.get("follow_ups") or []):
         if not fu.get("when"):
@@ -172,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
     people = People.load(paths.people_file)
     state = State.load(paths.state_file)
     writes = plan_writes(digest, args.key, paths, people, now, today=args.today, done=set(state.processed))
+    if not args.dry_run:
+        args.digest.write_text(json.dumps(digest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     try:
         n = apply(writes, state, dry_run=args.dry_run, force=args.force, now=now)
     except MtimeGuard as exc:

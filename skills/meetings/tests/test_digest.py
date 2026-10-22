@@ -101,3 +101,10 @@ def test_run_claude_parses_dict_envelope(monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", lambda *a, **k: Proc())
     assert digest.run_claude("x") == "hello"
+
+
+def test_landed_digest_still_validates():
+    import digest as dg
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["landed"] = {"file": "worklog.org", "heading": "Rob 1-1"}
+    assert dg.validate(d) == []
