@@ -53,3 +53,15 @@ def test_reused_filename_is_redigested(org):
 def test_arxiv_usage_error_is_not_nothing_to_do(org):
     org_dir, fake = org
     assert run(org_dir, fake, "arxiv", "--", "--dry-run").returncode == 1
+
+
+def test_chat_file_lands_as_chat_block(org):
+    org_dir, fake = org
+    (org_dir / "meetings" / "inbox" / "2026-10-21-slack-tron.txt").write_text(
+        "title: Slack #tron\ndate: 2026-10-21\ntime: 09:00\nsource: slack\nkind: chat\nattendees: Rob Smith, Nick Tomasino\n\n"
+        "Rob Smith: @Nick Tomasino can you look at the proof diff?\nNick Tomasino: yes, by Friday.\n")
+    r = run(org_dir, fake, "daily")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = (org_dir / "worklog.org").read_text()
+    assert "** Rob 1:1 :chat:auto:" in text  # fake claude keeps the fixture title; the kind came from the header
+    assert text.count(":chat:auto:") == 1

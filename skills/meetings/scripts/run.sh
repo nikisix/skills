@@ -1,7 +1,7 @@
 #!/bin/bash
 # Orchestrator for the meetings pipeline. Invoked by launchd (absolute paths, no shell profile).
 #
-#   run.sh daily              fetch Teams transcripts, then digest + land every file in inbox/
+#   run.sh daily              fetch Teams transcripts + Slack days, then digest + land every file in inbox/
 #   run.sh arxiv              weekly arXiv scan against open work items
 #   run.sh digest-one <file>  normalize -> digest -> write_org -> suggest -> archive, for one file
 #   run.sh status             what is pending, last runs, tail of today's log
@@ -60,6 +60,12 @@ cmd_daily() {
     case $rc in 0) log "teams: fetched new transcripts";; 2) log "teams: nothing new";; *) log "teams: fetch failed ($rc), continuing (run 'm365 status')";; esac
   else
     log "teams: m365 not installed, skipping fetch"
+  fi
+  if [ -f "$MEET/slack.yaml" ]; then
+    py fetch_slack.py >>"$LOG" 2>&1; rc=$?
+    case $rc in 0) log "slack: fetched new conversation-days";; 2) log "slack: nothing new";; *) log "slack: fetch failed ($rc), continuing (token? see runbook)";; esac
+  else
+    log "slack: no meetings/slack.yaml, skipping"
   fi
   local any=0 skipped=0 f
   shopt -s nullglob
