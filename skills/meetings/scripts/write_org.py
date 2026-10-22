@@ -26,6 +26,7 @@ from state import State
 
 GUARD_MINUTES = 15
 EXIT_GUARD = 3
+EXIT_NOTHING = 2
 
 
 class MtimeGuard(Exception):
@@ -177,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"skipped: {exc}", file=sys.stderr)
         return EXIT_GUARD
     print(f"{'would write' if args.dry_run else 'wrote'} {n} block(s)")
-    return 0
+    return 0 if n else EXIT_NOTHING
 
 
 if __name__ == "__main__":

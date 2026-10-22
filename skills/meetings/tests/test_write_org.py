@@ -150,3 +150,11 @@ def test_mtime_guard(org, tmp_path):
     rc = write_org.main([str(dj), "--key", "k1", "--now", NOW.isoformat(), "--today", TODAY.isoformat(), "--force"])
     assert rc == 0
     assert ":auto:" in (org / "worklog.org").read_text()
+
+
+def test_cli_nothing_to_do_exits_2(org, tmp_path):
+    dj = tmp_path / "d.json"
+    dj.write_text(json.dumps(_digest()))
+    args = [str(dj), "--key", "k1", "--now", NOW.isoformat(), "--today", TODAY.isoformat()]
+    assert write_org.main(args) == 0
+    assert write_org.main(args) == 2

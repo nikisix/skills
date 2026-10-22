@@ -1,0 +1,10 @@
+* In Progress
+** Trontology upgrade: synonyms, transforms - @David - [[https://rmt.atlassian.net/browse/DEV-10716][DEV-10716]]
+*** notes
+    - some detail
+** Build a proof-diff tool for CSV exports - @Nick - [[https://rmt.atlassian.net/browse/DEV-10900][DEV-10900]]
+* To Do
+** Accuracy dashboard - @Abhi
+* Needs Refinement
+* Done
+** Old thing - @Nick - [[https://rmt.atlassian.net/browse/DEV-1][DEV-1]]
