@@ -8,7 +8,7 @@
     {"text": "Align Jira buckets with David this week", "firmness": "committed", "by": "Nick"}
   ],
   "action_items": [
-    {"text": "draft the CSV proofs runbook", "owner": "Nick", "due": "2026-10-24", "jira": "DEV-10173", "ticket_worthy": false},
+    {"text": "draft the CSV proofs runbook", "owner": "Nick", "due": "2026-10-23", "jira": "DEV-10173", "ticket_worthy": false},
     {"text": "send the sample CSV file", "owner": "Rob", "due": null, "jira": null, "ticket_worthy": false},
     {"text": "build a proof-diff tool for CSV exports", "owner": "Nick", "due": null, "jira": null, "ticket_worthy": true}
   ],
