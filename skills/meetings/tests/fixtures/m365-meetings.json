@@ -1,0 +1,16 @@
+[
+  {
+    "id": "MSpiMjA5MWUxOC03ODgyLTRlZmUtYjdkMS05MDcwM2E2ZWRiNTQqMCoqMTk6bWVldGluZ19ZbVF3TnpkaE5HUXRNRFF4",
+    "subject": "CSV Proofs Sync",
+    "startDateTime": "2026-10-21T22:00:00.0000000Z",
+    "endDateTime": "2026-10-21T22:30:00.0000000Z",
+    "joinWebUrl": "https://teams.microsoft.com/l/meetup-join/abc"
+  },
+  {
+    "id": "MSpiMjA5MWUxOC03ODgyLTRlZmUtYjdkMS05MDcwM2E2ZWRiNTQqMCoqMTk6bWVldGluZ19TRUNPTkQ",
+    "subject": "Rob / Nick: 1:1",
+    "startDateTime": "2026-10-20T16:30:00.0000000Z",
+    "endDateTime": "2026-10-20T17:00:00.0000000Z",
+    "joinWebUrl": "https://teams.microsoft.com/l/meetup-join/def"
+  }
+]
