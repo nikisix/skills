@@ -9,6 +9,7 @@ dependencies = [
     "jsonschema>=4.23",
     "pyyaml>=6.0",
     "arxiv>=2.1",
+    "slack-sdk>=3.45.0",
 ]
 
 [dependency-groups]

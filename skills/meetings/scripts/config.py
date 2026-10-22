@@ -56,6 +56,10 @@ class Paths:
     def people_file(self) -> Path:
         return self.meetings_dir / "people.yaml"
 
+    @property
+    def slack_file(self) -> Path:
+        return self.meetings_dir / "slack.yaml"
+
     def archive_for(self, d: date) -> Path:
         """Monthly archive file for a past month: 2026/2026-09-worklog.org."""
         return self.org_dir / f"{d.year}" / f"{d.year}-{d.month:02d}-worklog.org"

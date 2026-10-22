@@ -14,6 +14,7 @@ class State:
     processed: dict[str, dict] = field(default_factory=dict)
     fetched: dict[str, dict] = field(default_factory=dict)
     last_teams_poll: str | None = None
+    last_slack_poll: str | None = None  # last fully fetched local day, YYYY-MM-DD
     last_arxiv_run: str | None = None
     arxiv_seen: set[str] = field(default_factory=set)
     arxiv_queries: dict[str, list[str]] = field(default_factory=dict)
@@ -29,6 +30,7 @@ class State:
             processed=data.get("processed", {}),
             fetched=data.get("fetched", {}),
             last_teams_poll=data.get("last_teams_poll"),
+            last_slack_poll=data.get("last_slack_poll"),
             last_arxiv_run=data.get("last_arxiv_run"),
             arxiv_seen=set(data.get("arxiv_seen", [])),
             arxiv_queries=data.get("arxiv_queries", {}),
@@ -44,11 +46,13 @@ class State:
             self.arxiv_seen |= other.arxiv_seen
             self.arxiv_queries = {**other.arxiv_queries, **self.arxiv_queries}
             self.last_teams_poll = self.last_teams_poll or other.last_teams_poll
+            self.last_slack_poll = max(filter(None, [self.last_slack_poll, other.last_slack_poll]), default=None)
             self.last_arxiv_run = self.last_arxiv_run or other.last_arxiv_run
         data = {
             "processed": self.processed,
             "fetched": self.fetched,
             "last_teams_poll": self.last_teams_poll,
+            "last_slack_poll": self.last_slack_poll,
             "last_arxiv_run": self.last_arxiv_run,
             "arxiv_seen": sorted(self.arxiv_seen),
             "arxiv_queries": self.arxiv_queries,
