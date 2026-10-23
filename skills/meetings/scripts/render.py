@@ -98,10 +98,11 @@ def _item_lines(item: dict, people: People) -> list[str]:
 
 
 def meeting_body(d: dict, people: People, now: datetime) -> list[str]:
-    """The bullet lines (marker, summary, decisions, open questions) that sit in a heading's own body."""
+    """The marker as its own *** subheading, with summary, decisions, and open questions as its bullets,
+    so they never become body text of the ** heading (or of a hand-written heading on merge)."""
     lines: list[str] = []
     attendees = ", ".join(d.get("attendees") or [])
-    lines.append(f"   - meetings (auto) {now.strftime('%Y-%m-%dT%H:%M')} · source: {d['source']} · attendees: {attendees}")
+    lines.append(f"*** meetings (auto) {now.strftime('%Y-%m-%dT%H:%M')} · source: {d['source']} · attendees: {attendees}")
     lines.append(f"   - {org_text(d['summary'])}")
     for dec in d.get("decisions") or []:
         by = f" — {org_text(people.resolve(dec.get('by')) or dec.get('by'))}" if dec.get("by") else ""

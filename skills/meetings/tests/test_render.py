@@ -45,7 +45,7 @@ def test_block_new_heading_shape(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
     assert lines[0] == "** Rob 1:1 :meeting:auto:"
-    assert lines[1] == "   - meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob"
+    assert lines[1] == "*** meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob"
     assert lines[2].startswith("   - Status on accuracy work")
     assert "   - Decided (committed): Align Jira buckets with David this week — Nick" in lines
     assert "   - Open: Who owns the accuracy dashboard?" in lines
@@ -54,8 +54,19 @@ def test_block_new_heading_shape(org_dir):
 def test_block_merged_has_no_heading_line(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=False)
-    assert lines[0].startswith("   - meetings (auto)")
+    assert lines[0].startswith("*** meetings (auto)")
     assert not any(l.startswith("** ") for l in lines)
+
+
+def test_body_bullets_sit_under_the_marker_subheading(org_dir):
+    """The marker is a *** headline of its own so the summary and decisions are not body text of the
+    ** heading (or of a hand-written heading on merge); action items follow as sibling *** lines."""
+    d = json.loads((FIX / "digest-good.json").read_text())
+    lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
+    marker = lines.index("*** meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob")
+    first_item = next(i for i, l in enumerate(lines) if l.startswith("*** ") and i > marker)
+    assert marker == 1
+    assert all(l.startswith("   - ") for l in lines[marker + 1 : first_item]) and first_item > marker + 1
 
 
 def test_mine_vs_others_keyword(org_dir):

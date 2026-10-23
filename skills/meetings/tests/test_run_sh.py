@@ -45,7 +45,7 @@ def test_reused_filename_is_redigested(org):
     os.utime(org_dir / "worklog.org", (old, old))  # otherwise the mtime guard (rightly) skips
     assert run(org_dir, fake, "daily").returncode == 0
     text = (org_dir / "worklog.org").read_text()
-    assert text.count("- meetings (auto)") == 2
+    assert text.count("*** meetings (auto)") == 2
     assert "** Second :meeting:auto:" in text  # the new transcript was digested, not the stale JSON reused
     assert run(org_dir, fake, "daily").returncode == 2  # inbox empty
 

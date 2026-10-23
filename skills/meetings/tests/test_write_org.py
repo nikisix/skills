@@ -60,7 +60,7 @@ def test_merge_under_existing_heading(org):
     j = lines.index("** INPROGRESS Ontology 2.0 - RX Skeleton")
     block = lines[i + 1 : j]
     assert block[0] == "   - my own notes about accuracy"  # my line stays first and unchanged
-    assert "   - meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob" in block
+    assert "*** meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob" in block
     assert any(l.startswith("*** TODO draft the CSV proofs runbook - @Nick - [[") and l.endswith(":auto:") for l in block)
     assert "*** TODO revisit accuracy targets - @Nick :auto:" in block
     assert not any("** Rob 1:1" in l for l in lines)  # no second heading
@@ -135,7 +135,7 @@ def test_dry_run_writes_nothing(org, capsys):
     out = capsys.readouterr().out
     assert n == len(writes)
     assert out.startswith(f"== {paths.worklog}:")
-    assert "   - meetings (auto) 2026-10-22T06:31" in out
+    assert "*** meetings (auto) 2026-10-22T06:31" in out
     assert (org / "worklog.org").read_text() == (FIX / "worklog-sample.org").read_text()
     assert not paths.state_file.exists()
 
@@ -182,7 +182,7 @@ def test_merge_bullets_precede_existing_children(org):
     _run(org, d)
     lines = (org / "worklog.org").read_text().splitlines()
     h = lines.index("** CSV Proofs - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]")
-    marker = next(i for i, l in enumerate(lines) if l.startswith("   - meetings (auto)"))
+    marker = next(i for i, l in enumerate(lines) if l.startswith("*** meetings (auto)"))
     done = lines.index("*** DONE incorporate Marcus' ontology edits")
     todo = next(i for i, l in enumerate(lines) if l.startswith("*** TODO draft the CSV proofs runbook"))
     assert h < marker < done < todo < lines.index("* TODO")
@@ -205,4 +205,4 @@ def test_chat_never_merges_under_hand_written_heading(org):
     lines = (org / "worklog.org").read_text().splitlines()
     assert "** Slack DM Rob :chat:auto:" in lines
     i = lines.index("** Rob 1-1")
-    assert lines[i + 1] == "   - my own notes about accuracy" and not lines[i + 2].startswith("   - meetings (auto)")
+    assert lines[i + 1] == "   - my own notes about accuracy" and not lines[i + 2].startswith("*** meetings (auto)")
