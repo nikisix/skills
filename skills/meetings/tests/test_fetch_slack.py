@@ -188,3 +188,16 @@ def test_failed_conversation_does_not_block_others(org_dir):
     s = State.load(paths.state_file)
     assert "slack:G1:2026-10-21" in s.fetched and "slack:C1:2026-10-21" not in s.fetched
     assert s.last_slack_poll is None  # a failed day is retried next run
+
+
+def test_slackbot_dm_is_not_selected():
+    """users.conversations lists the Slackbot DM, but conversations.history on it is channel_not_found."""
+    convs = CONVS + [{"id": "D9", "is_im": True, "user": "USLACKBOT"}]
+    assert "D9" not in [c["id"] for c in fetch_slack.select_conversations(convs, CFG)]
+
+
+def test_app_posts_with_bot_id_are_not_human():
+    """The Jira Cloud app posts with a `user` id *and* a `bot_id` and no subtype; it must not count toward min_messages."""
+    jira = {"type": "message", "user": "UHJFH8G0G", "bot_id": "BHLSVAYHJ", "text": "Chris commented on ITSM-1133", "ts": "1.0"}
+    assert not fetch_slack._human(jira)
+    assert fetch_slack._human({"type": "message", "user": "U1", "text": "hi", "ts": "1.0"})

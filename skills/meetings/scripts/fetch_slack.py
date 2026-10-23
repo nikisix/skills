@@ -123,7 +123,7 @@ def select_conversations(convs: list[dict], cfg: SlackConfig) -> list[dict]:
     out = []
     for c in convs:
         if c.get("is_im"):
-            if cfg.dms:
+            if cfg.dms and c.get("user") != "USLACKBOT":  # listed, but history is channel_not_found
                 out.append(c)
         elif c.get("is_mpim"):
             if cfg.group_dms:
@@ -152,7 +152,9 @@ def clean_text(text: str, client) -> str:
 
 
 def _human(m: dict) -> bool:
-    return m.get("type") == "message" and m.get("subtype") not in SKIP_SUBTYPES and bool(m.get("user")) and bool(m.get("text", "").strip())
+    """A person typed it: apps such as Jira post with a `user` id *and* a `bot_id` and no subtype."""
+    return (m.get("type") == "message" and m.get("subtype") not in SKIP_SUBTYPES and not m.get("bot_id")
+            and bool(m.get("user")) and bool(m.get("text", "").strip()))
 
 
 THREAD_LOOKBACK_DAYS = 7
