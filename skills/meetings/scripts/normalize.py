@@ -93,17 +93,25 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 
 
 def _read_vtt(path: Path) -> str:
+    """One 'Name: text' line per speaker turn. Teams splits a sentence across cues (and across lines
+    inside a cue), so consecutive cues from one speaker are joined; a repeated cue is dropped."""
     import webvtt
 
-    out: list[str] = []
+    turns: list[list[str]] = []  # [speaker, text]
+    last_text = None
     for caption in webvtt.read(str(path)):
         raw = caption.raw_text.strip()
         m = SPEAKER_TAG_RE.search(raw)
-        text = ANY_TAG_RE.sub("", raw).strip()
-        line = f"{m.group(1).strip()}: {text}" if m else text
-        if line and (not out or out[-1] != line):
-            out.append(line)
-    return "\n".join(out)
+        speaker = m.group(1).strip() if m else ""
+        text = re.sub(r"\s+", " ", ANY_TAG_RE.sub("", raw)).strip()
+        if not text or text == last_text:
+            continue
+        last_text = text
+        if turns and turns[-1][0] == speaker:
+            turns[-1][1] += " " + text
+        else:
+            turns.append([speaker, text])
+    return "\n".join(f"{who}: {what}" if who else what for who, what in turns)
 
 
 def _read_docx(path: Path) -> str:

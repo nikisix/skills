@@ -119,3 +119,16 @@ def test_kind_chat_round_trips(tmp_path):
     assert "kind: chat\n" in meta.header()
     meta2, _ = normalize(FIX / "2026-10-20-rob-1-1.txt")
     assert meta2.kind == "meeting" and "kind: meeting\n" in meta2.header()
+
+
+def test_vtt_merges_consecutive_cues_and_internal_newlines(tmp_path):
+    p = tmp_path / "2026-10-22-x.vtt"
+    p.write_text(
+        "WEBVTT\n\nid/1-0\n00:00:01.000 --> 00:00:02.000\n<v Mitch Slavens>See, I'll kick this off.\nWe're going to go through some design</v>\n\n"
+        "id/1-1\n00:00:02.000 --> 00:00:03.000\n<v Mitch Slavens>stuff for the classifier.</v>\n\n"
+        "id/2-0\n00:00:03.000 --> 00:00:04.000\n<v Nick Tomasino>Separate.</v>\n\n"
+        "id/2-1\n00:00:04.000 --> 00:00:05.000\n<v Nick Tomasino>Separate.</v>\n")
+    assert read_transcript(p).splitlines() == [
+        "Mitch Slavens: See, I'll kick this off. We're going to go through some design stuff for the classifier.",
+        "Nick Tomasino: Separate.",
+    ]
