@@ -55,8 +55,8 @@ Invalid JSON is retried once with the validation errors appended; a second failu
 `scripts/fetch_slack.py` pulls each *completed* local day of your DMs, group DMs, and the channels
 listed in `meetings/slack.yaml` into `inbox/YYYY-MM-DD-slack-<name>.txt` with `kind: chat`. The chat
 prompt (`references/chat-prompt.md`) is handed the open work items from `worklog.org` and
-`tron-tasks.org` and returns only *new* action items, which land as `*** TODO` lines under a
-`** Slack #<channel> :chat:auto:` block on that day. Token: `$SLACK_USER_TOKEN` or the keychain item
+`tron-tasks.org` and returns only *new* action items, which land as `**** TODO` lines under a
+`*** Slack #<channel> :chat:auto:` block inside the day's single `** Slack :chat:auto:` group. Token: `$SLACK_USER_TOKEN` or the keychain item
 `meetings-slack`. `run.sh daily` runs it after the Teams fetch; it is skipped when `slack.yaml` is absent.
 
 ## Exit codes (writers)
