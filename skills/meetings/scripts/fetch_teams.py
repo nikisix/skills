@@ -5,8 +5,9 @@ Window = state.last_teams_poll (or now - 14 days on first run) .. now. Each tran
 YYYY-MM-DD-HHMM-<slug>.vtt in America/Los_Angeles so normalize.py reads date/time/title from them.
 
 Requires: `npm i -g @pnp/cli-microsoft365` plus your own Entra app (CLI v10+ has no default one):
-delegated OnlineMeetings.Read + OnlineMeetingTranscript.Read.All (admin consent), `m365 cli config set`
-clientId/tenantId, then `m365 login` (device code). Steps: ~/org/ringmaster/CLAUDE-meetings.md.
+delegated Calendars.Read (meeting list walks the calendar) + OnlineMeetings.Read +
+OnlineMeetingTranscript.Read.All (admin consent), `m365 cli config set` clientId/tenantId/authType=browser,
+then `m365 login`. Steps: ~/org/ringmaster/CLAUDE-meetings.md.
 
 Usage: fetch_teams.py [--since ISO] [--dry-run]
 """
