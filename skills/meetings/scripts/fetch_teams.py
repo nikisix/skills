@@ -41,8 +41,13 @@ def m365(args: list[str]) -> Any:
     return json.loads(proc.stdout or "null")
 
 
+def graph_time(dt: datetime) -> str:
+    """m365 validates ISO strings strictly: UTC, whole seconds, trailing Z."""
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def list_meetings(start: datetime, end: datetime) -> list[dict]:
-    out = m365(["teams", "meeting", "list", "--isOrganizer", "--startDateTime", start.isoformat(), "--endDateTime", end.isoformat()])
+    out = m365(["teams", "meeting", "list", "--isOrganizer", "--startDateTime", graph_time(start), "--endDateTime", graph_time(end)])
     return list(out or [])
 
 

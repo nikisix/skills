@@ -47,8 +47,9 @@ def test_first_run_window_14_days(org_dir, fake_m365):
     fetch_teams.fetch(paths, state, NOW)
     listing = next(c for c in fake_m365 if c[:3] == ["teams", "meeting", "list"])
     assert "--isOrganizer" in listing
-    assert listing[listing.index("--startDateTime") + 1] == (NOW - timedelta(days=14)).isoformat()
-    assert listing[listing.index("--endDateTime") + 1] == NOW.isoformat()
+    # m365 rejects fractional seconds / +00:00 offsets: it wants 2026-10-08T06:30:00Z
+    assert listing[listing.index("--startDateTime") + 1] == "2026-10-08T06:30:00Z"
+    assert listing[listing.index("--endDateTime") + 1] == "2026-10-22T06:30:00Z"
 
 
 def test_writes_state_after_download(org_dir, fake_m365):
@@ -77,7 +78,7 @@ def test_second_run_window_starts_at_last_poll(org_dir, fake_m365):
     fetch_teams.fetch(paths, state, NOW)
     listing = next(c for c in fake_m365 if c[:3] == ["teams", "meeting", "list"])
     # two-day overlap: a meeting still running at the last poll had no transcript yet
-    assert listing[listing.index("--startDateTime") + 1] == (NOW - timedelta(days=3)).isoformat()
+    assert listing[listing.index("--startDateTime") + 1] == "2026-10-19T06:30:00Z"
 
 
 def test_dry_run_downloads_nothing(org_dir, fake_m365, capsys):
