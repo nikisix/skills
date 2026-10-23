@@ -63,5 +63,5 @@ def test_chat_file_lands_as_chat_block(org):
     r = run(org_dir, fake, "daily")
     assert r.returncode == 0, r.stdout + r.stderr
     text = (org_dir / "worklog.org").read_text()
-    assert "** Rob 1:1 :chat:auto:" in text  # fake claude keeps the fixture title; the kind came from the header
-    assert text.count(":chat:auto:") == 1
+    assert "** Slack :chat:auto:\n*** Rob 1:1 :chat:auto:" in text  # fake claude keeps the fixture title; kind from the header
+    assert text.count(":chat:auto:") == 2  # the day's group + the one conversation

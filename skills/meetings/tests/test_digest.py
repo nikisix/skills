@@ -161,10 +161,12 @@ def test_pin_to_header_sets_kind():
 
 def test_open_items_include_landed_auto_todos(org_dir):
     (org_dir / "worklog.org").write_text(
-        "* <2026-10-21 Wed>\n\n** Slack #tron :chat:auto:\n   - meetings (auto) x\n"
-        "*** TODO Send Rob the DMP access creds - @Nick :auto:\n*** DONE old thing - @Nick :auto:\n"
+        "* <2026-10-21 Wed>\n\n** Slack :chat:auto:\n*** Slack #tron :chat:auto:\n**** meetings (auto) x\n"
+        "**** TODO Send Rob the DMP access creds - @Nick :auto:\n**** DONE old thing - @Nick :auto:\n"
+        "** Rob 1:1 :meeting:auto:\n*** meetings (auto) y\n*** TODO Draft the proofs runbook - @Nick :auto:\n"
         "** TODO Follow up\n\n* TODO\n** Align on Jira buckets\n")
     from config import Paths
     items = digest.open_work_items(Paths(org_dir))
-    assert "Send Rob the DMP access creds" in items and "Follow up" in items and "Align on Jira buckets" in items
+    assert "Send Rob the DMP access creds" in items and "Draft the proofs runbook" in items
+    assert "Follow up" in items and "Align on Jira buckets" in items
     assert "old thing" not in items

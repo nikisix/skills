@@ -203,6 +203,26 @@ def test_chat_never_merges_under_hand_written_heading(org):
     d = _digest(title="Slack DM Rob", attendees=["Nick", "Rob"], kind="chat", follow_ups=[])
     _run(org, d)
     lines = (org / "worklog.org").read_text().splitlines()
-    assert "** Slack DM Rob :chat:auto:" in lines
+    assert "*** Slack DM Rob :chat:auto:" in lines and "** Slack DM Rob :chat:auto:" not in lines
     i = lines.index("** Rob 1-1")
     assert lines[i + 1] == "   - my own notes about accuracy" and not lines[i + 2].startswith("*** meetings (auto)")
+
+
+def test_chat_blocks_group_under_one_slack_heading_per_day(org):
+    _run(org, _digest(title="Slack DM Rob", attendees=["Nick", "Rob"], kind="chat", follow_ups=[]), key="k1")
+    old = time.time() - 3600
+    os.utime(org / "worklog.org", (old, old))  # a later run, past the mtime guard
+    _run(org, _digest(title="Slack #tron", attendees=["Nick", "Rob"], kind="chat", follow_ups=[]), key="k2")
+    lines = (org / "worklog.org").read_text().splitlines()
+    groups = [i for i, l in enumerate(lines) if l == "** Slack :chat:auto:"]
+    assert len(groups) == 1, "one Slack group per day, reused by the second chat"
+    g = groups[0]
+    day = max(i for i, l in enumerate(lines[:g]) if l.startswith("* <"))
+    assert lines[day].startswith(f"* <{_digest()['date']}")  # the group sits under the digest's day
+    rob, tron = lines.index("*** Slack DM Rob :chat:auto:"), lines.index("*** Slack #tron :chat:auto:")
+    assert g < rob < tron
+    nxt = next(i for i in range(g + 1, len(lines)) if lines[i].startswith("* ") or lines[i].startswith("** "))
+    assert nxt > tron  # both conversations sit inside the group
+    assert lines[rob + 1].startswith("**** meetings (auto)")
+    assert any(l.startswith("**** TODO ") and l.endswith(":auto:") for l in lines[rob:tron])
+    assert not any(l.startswith("*** TODO ") for l in lines[g:nxt])

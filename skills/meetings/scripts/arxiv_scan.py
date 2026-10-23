@@ -60,7 +60,7 @@ def _top_sections(doc: OrgDoc) -> list[tuple[int, str]]:
 def collect_work_items(paths: Paths, include_children: bool = False) -> list[str]:
     """`**` titles under tron-tasks In Progress / To Do, plus worklog TODO/INPROGRESS day items and
     everything under the worklog's `* TODO` section. Owners and links are stripped; order kept.
-    `include_children` also takes `***` TODO/INPROGRESS items under day headers (the action items
+    `include_children` also takes `***`/`****` TODO/INPROGRESS items under day headers (the action items
     this pipeline itself landed), which the chat digest must dedupe against."""
     items: list[str] = []
 
@@ -81,7 +81,8 @@ def collect_work_items(paths: Paths, include_children: bool = False) -> list[str
         for idx, _ in doc.day_headers():
             take(doc, idx, OPEN_KEYWORDS)
             if include_children:
-                take(doc, idx, OPEN_KEYWORDS, level=3)
+                take(doc, idx, OPEN_KEYWORDS, level=3)  # meeting action items
+                take(doc, idx, OPEN_KEYWORDS, level=4)  # chat action items inside the day's ** Slack group
         for idx, name in _top_sections(doc):
             if name == "TODO":
                 take(doc, idx, None)

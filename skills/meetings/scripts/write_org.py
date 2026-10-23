@@ -19,9 +19,11 @@ from datetime import date, datetime
 from pathlib import Path
 
 from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
-from orgfile import OrgDoc
+from orgfile import plain_title, OrgDoc
 from people import People
 from render import followup_item, match_heading, meeting_block, meeting_body, meeting_children
+
+CHAT_GROUP = "Slack"
 from state import State
 
 GUARD_MINUTES = 15
@@ -92,6 +94,16 @@ class _Planner:
         self.doc(file).insert(at, lines)
         self.writes.append(Write(file, at, list(lines), wk))
 
+    def group(self, file: Path, day_idx: int, d: date, name: str = CHAT_GROUP) -> int:
+        """Find or create the day's `** <name> :chat:auto:` heading that chat blocks nest under."""
+        doc = self.doc(file)
+        for h in doc.headings(day_idx, 2):
+            if plain_title(h.title) == name:
+                return h.idx
+        at = _append_point(doc, day_idx)
+        self.add(file, at, [f"** {name} :chat:auto:"], f"{d.isoformat()}/{name}/group")
+        return at
+
     def day(self, file: Path, d: date) -> int:
         doc = self.doc(file)
         idx = doc.find_day(d)
@@ -131,6 +143,12 @@ def plan_writes(
         children = meeting_children(digest, people)
         if children:
             p.add(file, _append_point(doc, match.idx), children, f"{d.isoformat()}/{heading_title}/items")
+    elif digest.get("kind") == "chat":
+        # every conversation of the day sits one level down inside a single `** Slack` group
+        heading_title = digest["title"]
+        group_idx = p.group(file, day_idx, d)
+        p.add(file, _append_point(doc, group_idx), meeting_block(digest, people, now, new_heading=True, level=3),
+              f"{d.isoformat()}/{heading_title}")
     else:
         heading_title = digest["title"]
         p.add(file, _append_point(doc, day_idx), meeting_block(digest, people, now, new_heading=True), f"{d.isoformat()}/{heading_title}")

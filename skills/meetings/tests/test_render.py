@@ -163,3 +163,14 @@ def test_chat_block_tag(org_dir):
     d["kind"], d["title"] = "chat", "Slack #tron"
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
     assert lines[0] == "** Slack #tron :chat:auto:"
+
+
+def test_chat_block_renders_one_level_deeper(org_dir):
+    """Chat blocks nest under a per-day `** Slack` group: heading ***, marker and items ****."""
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["kind"] = "chat"
+    lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True, level=3)
+    assert lines[0] == "*** Rob 1:1 :chat:auto:"
+    assert lines[1].startswith("**** meetings (auto) 2026-10-22T06:31")
+    assert all(l.startswith(("**** ", "   - ", "    ")) for l in lines[2:])  # 4-space: DEADLINE / "- when: TBD"
+    assert any(l.startswith("**** TODO ") for l in lines)

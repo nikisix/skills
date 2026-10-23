@@ -87,22 +87,25 @@ def _jira_suffix(key: str | None) -> str:
     return f" - [[{JIRA_BROWSE}{key}][{key}]]" if key else ""
 
 
-def _item_lines(item: dict, people: People) -> list[str]:
+def _item_lines(item: dict, people: People, level: int = 2) -> list[str]:
     mine = people.is_me(item.get("owner"))
     keyword = "TODO " if mine else ""
-    head = f"*** {keyword}{org_text(item['text'])}{_owner_suffix(item.get('owner'), people)}{_jira_suffix(item.get('jira'))} :auto:"
+    stars = "*" * (level + 1)
+    head = f"{stars} {keyword}{org_text(item['text'])}{_owner_suffix(item.get('owner'), people)}{_jira_suffix(item.get('jira'))} :auto:"
     lines = [head]
     if item.get("due"):
         lines.append(f"    DEADLINE: {org_date(date.fromisoformat(item['due']))}")
     return lines
 
 
-def meeting_body(d: dict, people: People, now: datetime) -> list[str]:
-    """The marker as its own *** subheading, with summary, decisions, and open questions as its bullets,
-    so they never become body text of the ** heading (or of a hand-written heading on merge)."""
+def meeting_body(d: dict, people: People, now: datetime, level: int = 2) -> list[str]:
+    """The marker as its own subheading one level below the block heading (`level`), with summary,
+    decisions, and open questions as its bullets, so they never become body text of the heading
+    (or of a hand-written heading on merge)."""
     lines: list[str] = []
     attendees = ", ".join(d.get("attendees") or [])
-    lines.append(f"*** meetings (auto) {now.strftime('%Y-%m-%dT%H:%M')} · source: {d['source']} · attendees: {attendees}")
+    stars = "*" * (level + 1)
+    lines.append(f"{stars} meetings (auto) {now.strftime('%Y-%m-%dT%H:%M')} · source: {d['source']} · attendees: {attendees}")
     lines.append(f"   - {org_text(d['summary'])}")
     for dec in d.get("decisions") or []:
         by = f" — {org_text(people.resolve(dec.get('by')) or dec.get('by'))}" if dec.get("by") else ""
@@ -112,23 +115,26 @@ def meeting_body(d: dict, people: People, now: datetime) -> list[str]:
     return lines
 
 
-def meeting_children(d: dict, people: People) -> list[str]:
-    """The *** items: action items and undated follow-ups."""
+def meeting_children(d: dict, people: People, level: int = 2) -> list[str]:
+    """The child items one level below the block heading: action items and undated follow-ups."""
     lines: list[str] = []
+    stars = "*" * (level + 1)
     for item in d.get("action_items") or []:
-        lines.extend(_item_lines(item, people))
+        lines.extend(_item_lines(item, people, level))
     for fu in d.get("follow_ups") or []:
         if fu.get("when"):
             continue  # dated follow-ups live under their target day (write_org)
-        lines.append(f"*** TODO {org_text(fu['text'])} - @{people.me} :auto:")
+        lines.append(f"{stars} TODO {org_text(fu['text'])} - @{people.me} :auto:")
         lines.append("    - when: TBD")
     return lines
 
 
-def meeting_block(d: dict, people: People, now: datetime, new_heading: bool) -> list[str]:
+def meeting_block(d: dict, people: People, now: datetime, new_heading: bool, level: int = 2) -> list[str]:
+    """`level` is the block heading's depth: 2 for a meeting under the day, 3 for a chat inside the
+    day's `** Slack` group."""
     tag = "chat" if d.get("kind") == "chat" else "meeting"
-    head = [f"** {org_text(d['title'])} :{tag}:auto:"] if new_heading else []
-    return head + meeting_body(d, people, now) + meeting_children(d, people)
+    head = [f"{'*' * level} {org_text(d['title'])} :{tag}:auto:"] if new_heading else []
+    return head + meeting_body(d, people, now, level) + meeting_children(d, people, level)
 
 
 def followup_item(fu: dict, d: dict, people: People, link_file: str = "worklog.org") -> list[str]:
