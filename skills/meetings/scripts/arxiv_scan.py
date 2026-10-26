@@ -119,17 +119,34 @@ def build_query(query: str) -> str:
     return " AND ".join(f"all:{t}" for t in terms) + f" AND ({cats})"
 
 
+_CLIENT = None
+
+
+def _client():
+    """One client for the whole scan: arxiv.Client spaces its own requests (arXiv asks for 3 s between
+    calls); a fresh client per query starts with no history and fires them back to back -> HTTP 429."""
+    global _CLIENT
+    if _CLIENT is None:
+        import arxiv
+
+        _CLIENT = arxiv.Client(delay_seconds=3.0, num_retries=5)
+    return _CLIENT
+
+
 def search(query: str, since: date, max_results: int = 20) -> list[Paper]:
+    """Papers for one query since `since`; a query arXiv refuses is logged and yields nothing."""
     import arxiv
 
-    client = arxiv.Client()
     s = arxiv.Search(query=build_query(query), max_results=max_results, sort_by=arxiv.SortCriterion.SubmittedDate)
     out = []
-    for r in client.results(s):
-        if r.published.date() < since:
-            continue
-        pid = re.sub(r"v\d+$", "", r.get_short_id())
-        out.append(Paper(pid, r.title.strip(), r.summary.strip(), f"https://arxiv.org/abs/{pid}", r.published.date()))
+    try:
+        for r in _client().results(s):
+            if r.published.date() < since:
+                continue
+            pid = re.sub(r"v\d+$", "", r.get_short_id())
+            out.append(Paper(pid, r.title.strip(), r.summary.strip(), f"https://arxiv.org/abs/{pid}", r.published.date()))
+    except arxiv.ArxivError as exc:
+        print(f"arxiv: query {query!r} skipped: {exc}", file=sys.stderr)
     return out
 
 

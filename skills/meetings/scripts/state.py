@@ -18,6 +18,7 @@ class State:
     last_arxiv_run: str | None = None
     arxiv_seen: set[str] = field(default_factory=set)
     arxiv_queries: dict[str, list[str]] = field(default_factory=dict)
+    own_saves: dict[str, int] = field(default_factory=dict)  # org file -> st_mtime_ns after our last write
 
     @classmethod
     def load(cls, path: Path) -> "State":
@@ -34,6 +35,7 @@ class State:
             last_arxiv_run=data.get("last_arxiv_run"),
             arxiv_seen=set(data.get("arxiv_seen", [])),
             arxiv_queries=data.get("arxiv_queries", {}),
+            own_saves=data.get("own_saves", {}),
         )
 
     def save(self) -> None:
@@ -45,6 +47,7 @@ class State:
             self.fetched = {**other.fetched, **self.fetched}
             self.arxiv_seen |= other.arxiv_seen
             self.arxiv_queries = {**other.arxiv_queries, **self.arxiv_queries}
+            self.own_saves = {**other.own_saves, **self.own_saves}
             self.last_teams_poll = self.last_teams_poll or other.last_teams_poll
             self.last_slack_poll = max(filter(None, [self.last_slack_poll, other.last_slack_poll]), default=None)
             self.last_arxiv_run = self.last_arxiv_run or other.last_arxiv_run
@@ -56,6 +59,7 @@ class State:
             "last_arxiv_run": self.last_arxiv_run,
             "arxiv_seen": sorted(self.arxiv_seen),
             "arxiv_queries": self.arxiv_queries,
+            "own_saves": self.own_saves,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".json.tmp")

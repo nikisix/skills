@@ -2,8 +2,9 @@
 heading or as a new :auto: heading) plus one SCHEDULED item per dated follow-up under its target day.
 
 Only additions are made. Every write carries a key `<digest key>|<file>|<heading path>` recorded in
-state.json, so reruns are no-ops. Files saved within the last GUARD_MINUTES are not touched
-(exit 3) unless --force: nvim does not reload a file that changes under it.
+state.json, so reruns are no-ops. Files saved by something other than this writer within the last
+GUARD_MINUTES are not touched (exit 3) unless --force: nvim does not reload a file that changes under
+it. Our own saves are recognized by mtime (state.own_saves), so several digests can land in one run.
 
 Usage: write_org.py <digest.json> --key <key> [--dry-run] [--force] [--now ISO] [--today YYYY-MM-DD]
 """
@@ -167,11 +168,15 @@ def plan_writes(
     return p.writes
 
 
-def _recently_saved(file: Path) -> bool:
-    """Wall-clock check (not --now): the question is whether an editor may have the file open."""
+def _recently_saved(file: Path, state: State) -> bool:
+    """Wall-clock check (not --now): the question is whether an editor may have the file open.
+    A file exactly as our last write left it (same mtime) was not saved by an editor since."""
     if not file.exists():
         return False
-    return time.time() - file.stat().st_mtime < GUARD_MINUTES * 60
+    st = file.stat()
+    if state.own_saves.get(str(file)) == st.st_mtime_ns:
+        return False
+    return time.time() - st.st_mtime < GUARD_MINUTES * 60
 
 
 def apply(writes: list[Write], state: State, dry_run: bool = False, *, force: bool = False, now: datetime | None = None) -> int:
@@ -183,7 +188,7 @@ def apply(writes: list[Write], state: State, dry_run: bool = False, *, force: bo
     files = list(dict.fromkeys(w.file for w in todo))
     if not dry_run and not force:
         for f in files:
-            if _recently_saved(f):
+            if _recently_saved(f, state):
                 raise MtimeGuard(f"{f} was saved less than {GUARD_MINUTES} min ago; retry later or --force")
     docs = {f: OrgDoc.load(f) for f in files}
     for w in todo:
@@ -196,6 +201,7 @@ def apply(writes: list[Write], state: State, dry_run: bool = False, *, force: bo
     if not dry_run:
         for f, doc in docs.items():
             doc.save_atomic(f)
+            state.own_saves[str(f)] = f.stat().st_mtime_ns
         state.save()
     return len(todo)
 

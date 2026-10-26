@@ -113,3 +113,36 @@ def test_gate_batches_and_survives_failure():
     hits = arxiv_scan.gate(["Accuracy dashboard"], papers, run_claude)
     assert len(calls) == 3  # 40 + 40 + 10
     assert [h.paper.id for h in hits] == ["2610.00040", "2610.00080"]
+
+
+def test_search_reuses_one_client(monkeypatch):
+    """arxiv.Client spaces its own requests; a fresh client per query would not."""
+    import arxiv
+
+    made = []
+
+    class Counting(arxiv.Client):
+        def __init__(self, *a, **kw):
+            made.append(kw)
+            super().__init__(*a, **kw)
+
+        def results(self, search, offset=0):
+            return iter(())
+
+    monkeypatch.setattr(arxiv, "Client", Counting)
+    monkeypatch.setattr(arxiv_scan, "_CLIENT", None)
+    for q in ("a b", "c d", "e f"):
+        assert arxiv_scan.search(q, date(2026, 10, 1)) == []
+    assert len(made) == 1 and made[0]["delay_seconds"] >= 3
+
+
+def test_search_skips_a_query_arxiv_refuses(monkeypatch, capsys):
+    import arxiv
+
+    class Refusing:
+        def results(self, search, offset=0):
+            raise arxiv.HTTPError("https://export.arxiv.org/api/query", 3, 429)
+
+    monkeypatch.setattr(arxiv_scan, "_CLIENT", Refusing())
+    assert arxiv_scan.search("gradient boosting", date(2026, 10, 1)) == []
+    assert "429" in capsys.readouterr().err

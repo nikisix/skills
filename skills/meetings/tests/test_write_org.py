@@ -226,3 +226,25 @@ def test_chat_blocks_group_under_one_slack_heading_per_day(org):
     assert lines[rob + 1].startswith("**** meetings (auto)")
     assert any(l.startswith("**** TODO ") and l.endswith(":auto:") for l in lines[rob:tron])
     assert not any(l.startswith("*** TODO ") for l in lines[g:nxt])
+
+
+def test_guard_ignores_the_pipelines_own_save(org, tmp_path):
+    """Two digests in one run: the first save is ours, so the second must not be refused."""
+    d1, d2 = tmp_path / "d1.json", tmp_path / "d2.json"
+    d1.write_text(json.dumps(_digest()))
+    d2.write_text(json.dumps(_digest(title="Second Meeting")))
+    common = ["--now", NOW.isoformat(), "--today", TODAY.isoformat()]
+    assert write_org.main([str(d1), "--key", "k1", *common]) == 0
+    assert write_org.main([str(d2), "--key", "k2", *common]) == 0
+    assert any(k.startswith("k2|") for k in State.load(Paths(org).state_file).processed)
+
+
+def test_guard_trips_on_a_human_save_after_ours(org, tmp_path):
+    d1, d2 = tmp_path / "d1.json", tmp_path / "d2.json"
+    d1.write_text(json.dumps(_digest()))
+    d2.write_text(json.dumps(_digest(title="Second Meeting")))
+    common = ["--now", NOW.isoformat(), "--today", TODAY.isoformat()]
+    assert write_org.main([str(d1), "--key", "k1", *common]) == 0
+    later = time.time() + 1
+    os.utime(org / "worklog.org", (later, later))  # an editor saved after our write
+    assert write_org.main([str(d2), "--key", "k2", *common]) == 3
