@@ -2,7 +2,7 @@
 
 ## Context
 
-> Draft 2026-10-28. Extends the meetings pipeline
+> Approved 2026-10-28 after builder check. Extends the meetings pipeline
 > ([2026-10-22-meetings-pipeline-design.md](./2026-10-22-meetings-pipeline-design.md)). Runbook:
 > `~/org/ringmaster/CLAUDE-meetings.md`.
 
@@ -24,6 +24,9 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 | Ownership | Nick's file: he checks rows off and edits them. The pipeline appends rows and never rewrites a row |
 | Check-off semantics | `x` in DONE = finished from Nick's side: worklog item -> `DONE` + `CLOSED:`; a tron **sub-task** gets `:closed:`; a whole tron **task** moves to **In Review**. Any other word names the tron bucket directly (`review`, `qa`, `ready`, `accepted`, `closed`, `blocked`, `todo`, `progress`, `refine`, `maybe`) and still closes the worklog item |
 | Tagging | Every digested item carries its category; worklog headlines get it as an org tag (`:commitment:auto:`) |
+| Sub-task check-off | Mirrors the task rule: `x` on a tron sub-task writes `:in_review:`; every bucket word maps to the matching child tag jira-sync already transitions (`needs_refinement to_do reopen in_progress in_review ready_for_qa in_qa accepted closed`) |
+| Finding the ticket | Items rarely arrive with a key. The digest prompt is shown the tickets in play (tron `* In Progress` tasks and sub-tasks, plus today's worklog headings that carry a `DEV-` link) and links an item to one when it clearly is work on that ticket. Done-sync also reads a `DEV-` link Nick typed into the row or the worklog headline |
+| Open-question rows | The ↗ opens the meeting block's marker headline (nvim-orgmode cannot follow a text-search link); the row is matched to its state entry by that link plus the start of its WHAT text |
 
 ## Calls made in this document (builder may revisit; Nick should skim)
 
@@ -31,7 +34,10 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 |---|---|---|
 | EFFORT scale | `S` / `M` / `L`, estimated by the model, blank when it cannot say | Three buckets is what a glance can use; hours would be false precision from a transcript |
 | Row locator | The WHAT cell ends with an org link to the worklog item; that link target is the row's identity in `state.json`. No ID column | Keeps Nick's five columns; the link doubles as "jump to source" |
+| Link target form | Headline **without keyword and tags**: `worklog.org::*<text> - @Owner`. nvim-orgmode resolves `::*` by a lowercased prefix match on the title with the tag node stripped, so a target carrying `:commitment:auto:` never matches | Same string is the state identity and what done-sync and backfill match on |
 | Open questions in worklog | Stay as `- Open:` bullets under the marker; done = bullet becomes `- Resolved [date]:` | They never were headlines; turning them into headlines would change the worklog shape already approved |
+| Locator uniqueness | A locator already present in `state.ledger` (any day, any file) gets ` (2)`, ` (3)` appended to the worklog headline at landing | Two Slack days can yield identical items; done-sync's file-wide search needs unique targets |
+| Jira sync direction | Documented in the runbook: jira-sync's default pass is Jira -> org and would revert a done-sync bucket move; the move reaches Jira only when Nick runs the org -> Jira direction | Not this project's code, but the user must know which run to do next |
 | Backfill | One classification-only pass over the digests already on disk, rows appended, worklog lines **not** retro-tagged | Retro-tagging edits lines Nick may have touched; the row carries the category anyway |
 | Table alignment | The writer realigns the table it appends to (whitespace only) | An unaligned org table is unreadable in nvim; only whitespace changes, never content |
 | When done-sync runs | At the start of every `daily` run, and on demand (`run.sh done`) | Morning: Nick checks rows off, the next run (or `run.sh done`) propagates |
@@ -105,6 +111,11 @@ The prompts (`digest-prompt.md`, `chat-prompt.md`) carry Nick's definitions verb
 - `open_question`: asked and not answered, including a disagreement left standing.
 - `effort`: Nick's own effort to clear the item. `S` under an hour, `M` a half day to a day, `L` more.
   `null` for items others own unless the text implies Nick's share.
+- `jira`: the prompt receives `{{TICKETS}}`, one line per candidate: `DEV-10724 · TRON REFACTOR / perform
+  refactor`, built from every task and sub-task under `* In Progress` in `tron-tasks.org` plus every
+  heading under the current day in `worklog.org` that carries a `DEV-` link. The model sets `jira` to a
+  candidate's key when the item is clearly work on that ticket, keeps a key written in the text, and
+  otherwise leaves `null`. It never invents a key.
 
 Made decisions (`decisions[]`, any firmness) are **not** rows: a made decision is not an action item.
 
@@ -135,8 +146,20 @@ normalizer exists for the digests already on disk.
   keyword, including the owner suffix and tags, which is what org's `::*` search matches on.
 - The ledger file is subject to the same mtime guard as the worklog (exit 3 when Nick saved it in the
   last 15 minutes and the save was not ours). `apply()` already handles several files per run.
+- Key inheritance: an item with `jira: null` that lands under a hand-written heading carrying a `DEV-`
+  link records that key in its ledger entry (`"jira_source": "heading"`); the worklog headline is not
+  changed. An item whose key is known (from the digest or inherited) shows it in WHAT after the text as
+  `[[https://rmt.atlassian.net/browse/DEV-N][DEV-N]]`, before the ↗ link.
+- Open-question rows link to the block's marker headline (`worklog.org::*meetings (auto) …`) since
+  nvim-orgmode has no text-search links. Their state identity is `<marker locator>::Open: <text>`; the
+  row is matched to its entry by the link target plus the first 40 characters of WHAT. Several
+  questions from one block share the link and differ in the text prefix.
 - The merge rule (meeting block merged under a hand-written heading) does not change; the locator is the
   item's own headline, not the block's.
+- `tron-tasks.org` in the org dir is a symlink into OneDrive; every write resolves it first so
+  `save_atomic`'s `os.replace` does not replace the symlink with a file. Tron headlines are matched by
+  the `DEV-` key as a substring, not by `Heading.parse` (some tron lines have `- @Joseph [[…]]` with no
+  ` - ` before the link).
 
 ## Done-sync (`sync_done.py`, new)
 
@@ -152,39 +175,43 @@ Runs first in `cmd_daily` (before fetch) and via `run.sh done`. Steps:
    find `- Open: <text>` under the stored day and rewrite it to `- Resolved [YYYY-MM-DD]: <text>`. Not
    found: log `done-sync: <locator>: worklog item not found, skipped` and leave `done_at` unset so a
    later run retries after Nick fixes it.
-3. **Tron edit**, only when the entry has a Jira key. Find the headline in `tron-tasks.org` whose link
-   text is that key.
+3. **Tron edit.** The key is resolved in this order: the ledger entry's `jira`; a `DEV-\d+` in the row's
+   WHAT cell; a `DEV-\d+` in the worklog headline; a `DEV-\d+` in the nearest ancestor heading of that
+   headline in the worklog. No key anywhere: worklog edit only. With a key, find the headline in
+   `tron-tasks.org` containing that key.
    - Top-level task (`**` directly under a `* Bucket`): move its whole subtree (`section_end`) to the
-     end of the target bucket's section. `x` -> `In Review`; a bucket word -> its heading per the table
-     below. Same bucket already: no-op.
-   - Sub-task (`***` or deeper): swap its status tag. `x` or `closed` -> `:closed:`; `progress` ->
-     `:in_progress:`; `todo` -> `:to_do:`; any other word on a sub-task: log
-     `done-sync: <key>: bucket '<word>' is for whole tasks, sub-task tag unchanged` and continue.
+     end of the target bucket's section. Same bucket already: no-op.
+   - Sub-task (`***` or deeper): replace its status tag (add one if it has none) with the child tag for
+     the word. `blocked` and `maybe` have no child tag (those buckets do not sync): log
+     `done-sync: <key>: '<word>' has no sub-task tag, unchanged` and continue.
    - Key not found in the file: log and continue (the worklog edit still stands).
 
-   | DONE word | tron bucket heading |
-   |---|---|
-   | `x` | In Review |
-   | `review` | In Review |
-   | `ready` | Ready for QA |
-   | `qa` | In QA |
-   | `accepted` | Accepted |
-   | `closed` | Closed |
-   | `blocked` | Blocked (do not sync) |
-   | `maybe` | Maybe (do not sync) |
-   | `todo` | To Do |
-   | `progress` | In Progress |
-   | `refine` | Needs Refinement |
-   | anything else | log `unknown DONE word '<w>', tron untouched`; worklog edit still applied |
+   | DONE word | tron bucket heading (whole task) | child tag (sub-task) |
+   |---|---|---|
+   | `x` | In Review | `:in_review:` |
+   | `review` | In Review | `:in_review:` |
+   | `ready` | Ready for QA | `:ready_for_qa:` |
+   | `qa` | In QA | `:in_qa:` |
+   | `accepted` | Accepted | `:accepted:` |
+   | `closed` | Closed | `:closed:` |
+   | `reopen` | Reopen | `:reopen:` |
+   | `blocked` | Blocked (do not sync) | none, logged |
+   | `maybe` | Maybe (do not sync) | none, logged |
+   | `todo` | To Do | `:to_do:` |
+   | `progress` | In Progress | `:in_progress:` |
+   | `refine` | Needs Refinement | `:needs_refinement:` |
+   | anything else | log `unknown DONE word '<w>', tron untouched`; worklog edit still applied | |
 
    Words are matched case-insensitively with surrounding whitespace and `[ ]`/`[X]` brackets stripped,
    so `[X]`, `X`, `x`, `done` all mean `x`.
 4. Both files are under the mtime guard. A guard trip skips the whole done-sync with exit 3 (the daily
    run continues to fetch and digest; `run.sh daily` still exits 3 at the end so the retry fires).
    `tron-tasks.org` lives in OneDrive; the guard reads its mtime like any file.
-5. On success set `done_at` to now in the ledger entry. The DONE cell is never modified by the pipeline:
+5. Done-sync's own saves are registered in `state.own_saves` so the `write_org` calls later in the same
+   run do not trip the guard on them.
+6. On success set `done_at` to now in the ledger entry. The DONE cell is never modified by the pipeline:
    Nick wrote it, it stays as written.
-6. Log every edit as `done-sync: <file>:<line> <before> -> <after>` so the day's log is the undo list.
+7. Log every edit as `done-sync: <file>:<line> <before> -> <after>` so the day's log is the undo list.
    Edits are visible in `git diff worklog.org` (the org repo) and in OneDrive's version history for
    `tron-tasks.org`.
 
@@ -193,15 +220,17 @@ This is the one place the pipeline changes existing lines. The runbook's princip
 
 ## Backfill (`run.sh ledger-backfill`, run once)
 
-For every `meetings/digests/*.json` whose items lack `category`:
+For every `meetings/digests/*.json` whose items lack `category` (`--since YYYY-MM-DD` limits the pass;
+the full backlog is about 95 rows, most from the 10-22 and 10-23 Slack days). `normalize_digest()` fills
+fields in memory only and never persists, so "lacks `category`" stays true until backfill writes it:
 
 1. Run `classify.py` on the digest: a `claude -p` call with `references/classify-prompt.md`, which
    receives the digest's items and returns `{index -> {category, effort}}` per list. Fill the fields
    into the digest file in place. Cache nothing beyond the digest file itself.
 2. For each item whose worklog write key is in `state.processed`, build the locator from the processed
-   entry's file and the rendered headline (re-rendered from the digest with the same renderer; tags
-   differ, so the headline is matched **without** its tag suffix during backfill and the locator is
-   written as the headline actually present in the file), then append the row as in Landing.
+   entry's file and the rendered headline without keyword and tags (the general locator form), confirm
+   it is present in the file, then append the row as in Landing. Open questions use the block's marker
+   headline as described under Landing.
 3. If the located worklog headline already carries `DONE`, write `x` in the row's DONE cell and set
    `done_at` now, so the ledger starts in sync with hand-closed items.
 4. Worklog lines are **not** retro-tagged.
@@ -220,8 +249,11 @@ Items never landed (digest without processed keys) get no row.
 
 ## Edge cases the builder must handle
 
-- Two items with identical text in one day (locator collision): the second gets ` (2)` appended to its
-  worklog headline at landing time so locators stay unique; state records the actual headline.
+- Locator collision (same text, any day): the second gets ` (2)` appended to its worklog headline at
+  landing time; state records the actual headline. nvim's prefix match will offer both in a picker for
+  the shorter one; harmless.
+- Item text containing `|` is written with `¦` in the cell (org tables split on `|`).
+- WHO for an Open-question row is blank unless the question names who owes the answer.
 - Nick edits the WHAT text but keeps the link: fine, the link is the identity. Deletes the link: the
   row is his; done-sync skips it, and `ledger` reports it as "untracked rows" once.
 - Nick checks a row off and also flips the worklog line by hand: done-sync finds `DONE` already there,
@@ -245,6 +277,7 @@ backfill pre-fills `x` for already-DONE headlines · run.sh ordering (done-sync 
 
 ## Left to the builder
 
-Prompt wording for the classification rules and the classify-only prompt; the tolerant table reader;
+Prompt wording for the classification and ticket-linking rules and the classify-only prompt (backfill
+also runs the ticket-linking rule against the candidates as they stand today); the tolerant table reader;
 whether `sync_done.py` shares the org editing helpers with `write_org.py` via `orgfile.py` (preferred:
 add `replace_line`, `move_section` to `OrgDoc`); test fixture shapes.
