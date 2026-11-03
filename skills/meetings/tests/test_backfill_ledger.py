@@ -275,3 +275,18 @@ def test_backfill_legacy_bullet_marker_links_block_heading(org_dir):
     assert e["kind"] == "bullet" and e["headline"] == "Rob 1-1"
     oq = [r for r in ledger.rows(OrgDoc.load(paths.ledger)) if r.category == "open_question"]
     assert len(oq) == 1 and ledger.last_link_target(oq[0].cells[2]) == "worklog.org::*Rob 1-1"
+
+
+def test_backfill_finds_dated_followup_moved_to_another_day(org_dir, capsys):
+    """Nick rescheduled a follow-up by hand: the row and entry carry the day it sits under now."""
+    paths, _ = _setup(org_dir)
+    wl = org_dir / "worklog.org"
+    moved = FOLLOWUP_DAY.replace("* <2026-10-28 Wed>", "* <2026-10-29 Thu>").replace("SCHEDULED: <2026-10-28 Wed>", "SCHEDULED: <2026-10-29 Thu>")
+    wl.write_text(wl.read_text().replace(FOLLOWUP_DAY, "* <2026-10-28 Wed>\n\n" + moved))
+    _age(wl)
+    assert bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=fake_run, now=NOW) == 6
+    assert "found under 2026-10-29 (moved by hand)" in capsys.readouterr().out
+    e = State.load(paths.state_file).ledger["worklog.org::*sync with Rob on the roadmap - @Nick"]
+    assert e["day"] == "2026-10-29"
+    rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
+    assert rows["worklog.org::*sync with Rob on the roadmap - @Nick"].cells[0] == "<2026-10-29 Thu>"

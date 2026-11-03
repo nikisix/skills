@@ -232,6 +232,11 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             h = fdoc.find_headline(headline, fday, fdoc.section_end(fday))
             target = link_target(frel, headline)
             day_s, when_s, hdoc = when.isoformat(), org_date(when), fdoc
+            if h is None and (h := fdoc.find_headline(headline)) is not None:
+                under = _day_of(fdoc, h)  # rescheduled by hand: the row follows the item
+                if under:
+                    day_s, when_s = under.isoformat(), org_date(under)
+                    log(f"backfill: {key}: '{headline}' found under {under.isoformat()} (moved by hand)")
         else:
             h = doc.find_headline(headline, start, end)
             target = link_target(link_file, headline)
@@ -266,6 +271,15 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             p.ledger_row(cat, "", "", text, None, effort, marker_target,
                          entry(locator, "bullet", link_file, day, marker_headline, text, None, cat, None))
     return p.writes
+
+
+def _day_of(doc: OrgDoc, idx: int) -> date | None:
+    """The `* <date>` header the line at `idx` sits under."""
+    under = None
+    for i, d in doc.day_headers():
+        if i <= idx:
+            under = d
+    return under
 
 
 def _file_with_day(paths: Paths, when: date) -> tuple[OrgDoc | None, str]:
