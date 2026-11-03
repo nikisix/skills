@@ -153,17 +153,21 @@ def what_text(cell: str) -> str:
 
 def match_locator(cell: str, ledger: dict) -> str | None:
     """The ledger key a WHAT cell belongs to: its last link target, or for an open question (several
-    rows share the block's marker link) the entry whose text starts like the cell's text."""
+    rows share the block's marker link) the entry whose text equals the cell's text, else the one
+    entry whose text starts like it. Ambiguous -> None (untracked), never a guess."""
     target = last_link_target(cell)
     if target is None:
         return None
     if target in ledger:
         return target
-    prefix = what_text(cell)[:TEXT_PREFIX]
-    for locator, entry in ledger.items():
-        if locator.startswith(target + OPEN_SEP) and str(entry.get("text", ""))[:TEXT_PREFIX] == prefix:
-            return locator
-    return None
+    text = what_text(cell)
+    shared = {loc: str(e.get("text", "")) for loc, e in ledger.items() if loc.startswith(target + OPEN_SEP)}
+    exact = [loc for loc, t in shared.items() if t == text]
+    if len(exact) == 1:
+        return exact[0]
+    prefix = text[:TEXT_PREFIX]
+    close = [loc for loc, t in shared.items() if t[:TEXT_PREFIX] == prefix]
+    return close[0] if len(close) == 1 else None
 
 
 def row_line(when: str, who: str, what: str, effort: str, done: str = "") -> str:

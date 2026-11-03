@@ -74,6 +74,7 @@ STUB_UV = '''#!/bin/bash
 shift 5
 script="$(basename "$1")"; shift
 echo "$script $*" >> "$STUB_CALLS"
+echo "stub-out $script"
 var="STUB_EXIT_${script%.py}"
 exit "${!var:-2}"
 '''
@@ -119,3 +120,14 @@ def test_done_and_backfill_commands_dispatch(stub_env):
     assert calls == ["backfill_ledger.py --since 2026-10-01"] and r.returncode == 0
     r, calls = run_stub(stub_env, "ledger", ledger=0)
     assert calls == ["ledger.py "] and r.returncode == 0
+
+
+def test_done_and_backfill_append_to_the_day_log(stub_env):
+    org_dir, _, _ = stub_env
+    r, _ = run_stub(stub_env, "done", sync_done=3)
+    assert r.returncode == 3 and "stub-out sync_done.py" in r.stdout
+    r, _ = run_stub(stub_env, "ledger-backfill", backfill_ledger=0)
+    logs = list((org_dir / "meetings" / "logs").glob("*.log"))
+    assert len(logs) == 1
+    text = logs[0].read_text()
+    assert "stub-out sync_done.py" in text and "stub-out backfill_ledger.py" in text

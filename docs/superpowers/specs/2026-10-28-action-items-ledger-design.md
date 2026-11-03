@@ -155,8 +155,9 @@ normalizer exists for the digests already on disk.
   `[[https://rmt.atlassian.net/browse/DEV-N][DEV-N]]`, before the ↗ link.
 - Open-question rows link to the block's marker headline (`worklog.org::*meetings (auto) …`) since
   nvim-orgmode has no text-search links. Their state identity is `<marker locator>::Open: <text>`; the
-  row is matched to its entry by the link target plus the first 40 characters of WHAT. Several
-  questions from one block share the link and differ in the text prefix.
+  row is matched to its entry by the link target plus the WHAT text: an exact text match first, else
+  the single entry whose first 40 characters match; two candidates mean the row is untracked (reported,
+  never guessed). Several questions from one block share the link and differ in the text.
 - The merge rule (meeting block merged under a hand-written heading) does not change; the locator is the
   item's own headline, not the block's.
 - `tron-tasks.org` in the org dir is a symlink into OneDrive; every write resolves it first so
@@ -173,7 +174,8 @@ Runs first in `cmd_daily` (before fetch) and via `run.sh done`. Steps:
    locator is not in `state.ledger`, and entries with `done_at` set (already propagated).
 2. **Worklog edit.** Load the ledger entry's file. `kind: headline`: find the headline whose text (after
    stars and keyword) equals the stored headline, in the stored day's section first, anywhere in the
-   file second; replace its keyword (`TODO`, `INPROGRESS`, none) with `DONE` and insert
+   file second, then the same comparison with any trailing ` - [[…][DEV-N]]` stripped from both sides
+   (a key Nick adds to the headline by hand must not hide the item, and it then feeds the tron edit); replace its keyword (`TODO`, `INPROGRESS`, none) with `DONE` and insert
    `CLOSED: [YYYY-MM-DD Day HH:MM]` as the first body line, indented like `DEADLINE:`. `kind: bullet`:
    find `- Open: <text>` under the stored day and rewrite it to `- Resolved [YYYY-MM-DD]: <text>`. Not
    found: log `done-sync: <locator>: worklog item not found, skipped` and leave `done_at` unset so a

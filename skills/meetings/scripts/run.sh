@@ -114,9 +114,9 @@ case "${1:-}" in
   daily) cmd_daily;;
   arxiv) shift; cmd_arxiv "$@";;
   digest-one) [ -n "${2:-}" ] || { echo "usage: run.sh digest-one <file>" >&2; exit 1; }; digest_one "$2"; exit $?;;
-  done) shift; py sync_done.py "$@"; exit $?;;
+  done) shift; py sync_done.py "$@" 2>&1 | tee -a "$LOG"; exit "${PIPESTATUS[0]}";;   # the log is the undo list
   ledger) py ledger.py; exit $?;;
-  ledger-backfill) shift; py backfill_ledger.py "$@"; exit $?;;
+  ledger-backfill) shift; py backfill_ledger.py "$@" 2>&1 | tee -a "$LOG"; exit "${PIPESTATUS[0]}";;
   status) cmd_status;;
   *) sed -n '2,13p' "$0"; exit 1;;
 esac

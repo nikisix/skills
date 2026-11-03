@@ -20,7 +20,7 @@ from pathlib import Path
 
 from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from ledger import Row, match_locator, normalize_done, rows
-from orgfile import OrgDoc, headline_parts
+from orgfile import LINK_RE, OrgDoc, headline_parts
 from state import State
 from write_org import EXIT_GUARD, EXIT_NOTHING, _recently_saved
 
@@ -78,11 +78,26 @@ def _day_range(doc: OrgDoc, day: str) -> tuple[int, int] | None:
     return (idx, doc.section_end(idx)) if idx is not None else None
 
 
+def _bare(title: str) -> str:
+    """Headline title without a trailing ` - [[…][DEV-N]]`: a key Nick adds by hand must not hide the item."""
+    return LINK_RE.sub("", title).strip()
+
+
 def _find_headline(doc: OrgDoc, entry: dict) -> int | None:
+    """Exact title first (day section, then whole file), then the same with any trailing Jira link
+    stripped on both sides."""
     rng = _day_range(doc, entry.get("day", ""))
     if rng and (i := doc.find_headline(entry["headline"], *rng)) is not None:
         return i
-    return doc.find_headline(entry["headline"])
+    if (i := doc.find_headline(entry["headline"])) is not None:
+        return i
+    want = _bare(entry["headline"])
+    for start, end in ((rng or (0, len(doc.lines))), (0, len(doc.lines))):
+        for j in range(start, end):
+            parts = headline_parts(doc.lines[j])
+            if parts and _bare(parts[2]) == want:
+                return j
+    return None
 
 
 def _find_bullet(doc: OrgDoc, entry: dict) -> int | None:
@@ -299,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     edits, logs, done = plan(paths, state, now)
     for line in logs:
         print(line)
-    if not edits:
+    if not edits and not done:
         print("done-sync: nothing to do")
         return EXIT_NOTHING
     try:
@@ -307,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     except MtimeGuard as exc:
         print(f"done-sync: skipped: {exc}", file=sys.stderr)
         return EXIT_GUARD
-    print(f"done-sync: {'would apply' if args.dry_run else 'applied'} {len(edits)} edit(s)")
+    print(f"done-sync: {'would apply' if args.dry_run else 'applied'} {len(edits)} edit(s), {len(done)} row(s) closed")
     return 0
 
 

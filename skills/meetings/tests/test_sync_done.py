@@ -292,3 +292,24 @@ def test_log_lines_name_file_and_line(org_dir, capsys):
     out = capsys.readouterr().out.splitlines()
     assert "done-sync: worklog.org:7 *** TODO Ship it - @Nick :commitment:auto: -> *** DONE Ship it - @Nick :commitment:auto:" in out
     assert any(l.startswith("done-sync: tron-tasks.org:6 ** Ship it - @Nick - [[") and l.endswith("-> * In Review") for l in out)
+
+
+def test_zero_edit_row_still_gets_done_at(org_dir):
+    """Nick flipped the headline by hand (nvim wrote CLOSED too) and ticked the row: nothing to edit,
+    but the entry must close or the row is re-examined every morning."""
+    loc = "worklog.org::*already - @Nick"
+    wl = WORKLOG.replace("*** DONE already - @Nick :commitment:auto:\n", "*** DONE already - @Nick :commitment:auto:\n    CLOSED: [2026-10-21 Wed 09:12]\n")
+    paths = _setup(org_dir, [_row("already", loc, "x")], [_entry(loc, "already - @Nick", "already")], worklog=wl)
+    assert sync_done.main(ARGS) == 0
+    assert OrgDoc.load(paths.worklog).text == wl
+    assert State.load(paths.state_file).ledger[loc]["done_at"] == "2026-10-28T07:12"
+    assert sync_done.main(ARGS) == 2
+
+
+def test_hand_added_key_on_headline_still_matches_and_feeds_tron(org_dir):
+    wl = WORKLOG.replace("*** TODO Ship it - @Nick :commitment:auto:", f"*** TODO Ship it - @Nick - {_link('DEV-5')} :commitment:auto:")
+    paths = _setup(org_dir, [_row("Ship it", SHIP, "x")], [_entry(SHIP, "Ship it - @Nick", "Ship it")], worklog=wl)
+    assert sync_done.main(ARGS) == 0
+    assert f"*** DONE Ship it - @Nick - {_link('DEV-5')} :commitment:auto:" in OrgDoc.load(paths.worklog).lines
+    tr = OrgDoc.load(paths.tron_tasks)
+    assert _bucket_of(tr, _tron_idx(tr, "DEV-5")) == "* In Review"

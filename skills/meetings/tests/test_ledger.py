@@ -69,3 +69,16 @@ def test_match_locator_open_question_by_link_and_text_prefix():
     assert match_locator(f"rewritten text [[file:{marker}][↗]]", led) is None
     doc = OrgDoc(PREAMBLE + ["* Open question", HEADER, RULE, f"| | | {cell} | | x |"])
     assert report(doc, led) == {"open_question": {"open": 1, "done": 0}, "untracked": 0}
+
+
+def test_match_locator_prefers_exact_text_and_refuses_ambiguous_prefix():
+    from ledger import match_locator
+    marker = "worklog.org::*meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob"
+    a = "Should the accuracy dashboard be owned by platform or by data?"
+    b = "Should the accuracy dashboard be owned by Rob instead?"
+    led = {f"{marker}::Open: {a}": {"text": a}, f"{marker}::Open: {b}": {"text": b}}
+    assert match_locator(f"{b} [[file:{marker}][↗]]", led) == f"{marker}::Open: {b}"
+    assert match_locator(f"Should the accuracy dashboard be owned by someone [[file:{marker}][↗]]", led) is None
+    assert match_locator(f"Should the accuracy dashboard be owned by platform or by data? (edited) [[file:{marker}][↗]]", led) is None
+    led[f"{marker}::Open: {a}"]["text"] = a  # a lone prefix match still resolves
+    assert match_locator(f"Should the accuracy dashboard be owned by Rob instead? (edited) [[file:{marker}][↗]]", {k: v for k, v in led.items() if v["text"] == b}) == f"{marker}::Open: {b}"
