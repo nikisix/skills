@@ -52,3 +52,20 @@ def test_report_counts(org_dir):
         "| | @Nick | hand-written row | | |"])
     led = {"worklog.org::*a - @Nick": {"done_at": "2026-10-22T07:00"}, "worklog.org::*b - @Nick": {"done_at": None}}
     assert report(doc, led) == {"commitment": {"open": 1, "done": 1}, "untracked": 1}
+
+
+def test_match_locator_open_question_by_link_and_text_prefix():
+    from ledger import match_locator
+    marker = "worklog.org::*meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob"
+    led = {
+        marker + "::Open: Who owns the accuracy dashboard?": {"text": "Who owns the accuracy dashboard?", "done_at": None},
+        marker + "::Open: Who owns the accuracy dashboard? (2)": {"text": "Who owns the accuracy dashboard? (2)", "done_at": None},
+        "worklog.org::*a - @Nick": {"text": "a", "done_at": None},
+    }
+    cell = f"Who owns the accuracy dashboard? (2) [[file:{marker}][↗]]"
+    assert match_locator(cell, led) == marker + "::Open: Who owns the accuracy dashboard? (2)"
+    assert match_locator(f"a [[file:worklog.org::*a - @Nick][↗]]", led) == "worklog.org::*a - @Nick"
+    assert match_locator("hand-written row", led) is None
+    assert match_locator(f"rewritten text [[file:{marker}][↗]]", led) is None
+    doc = OrgDoc(PREAMBLE + ["* Open question", HEADER, RULE, f"| | | {cell} | | x |"])
+    assert report(doc, led) == {"open_question": {"open": 1, "done": 0}, "untracked": 0}

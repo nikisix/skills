@@ -1,6 +1,9 @@
 """Land a digest in the org files: meeting block under its day (merged into a matching hand-written
 heading or as a new :auto: heading) plus one SCHEDULED item per dated follow-up under its target day.
 
+Every landed item (action item, follow-up, open question) also lands as a row in action-items.org,
+with a ledger entry in state.json keyed by the row's locator link (see ledger.py).
+
 Only additions are made. Every write carries a key `<digest key>|<file>|<heading path>` recorded in
 state.json, so reruns are no-ops. Files saved by something other than this writer within the last
 GUARD_MINUTES are not touched (exit 3) unless --force: nvim does not reload a file that changes under
@@ -13,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -20,12 +24,24 @@ from datetime import date, datetime
 from pathlib import Path
 
 from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
+from digest import normalize_digest
+from ledger import CATEGORIES, HEADER, HEADING, PREAMBLE, RULE, link_target, realign, row_line, section_index, table_bounds, what_cell
 from orgfile import plain_title, OrgDoc
 from people import People
-from render import followup_item, match_heading, meeting_block, meeting_body, meeting_children
+from render import (
+    followup_headline,
+    followup_item,
+    item_headline,
+    match_heading,
+    meeting_block,
+    meeting_body,
+    meeting_children,
+    org_date,
+)
+from state import State
 
 CHAT_GROUP = "Slack"
-from state import State
+JIRA_KEY_RE = re.compile(r"[A-Z][A-Z0-9]+-\d+")
 
 GUARD_MINUTES = 15
 EXIT_GUARD = 3
@@ -42,6 +58,7 @@ class Write:
     insert_at: int  # 0-based line index in `file` as it stands when this write is applied, in order
     lines: list[str]
     write_key: str
+    ledger_entry: dict | None = None  # set on an action-items.org row write; recorded in state.ledger
 
 
 def target_file(paths: Paths, d: date, today: date) -> Path:
@@ -87,13 +104,36 @@ class _Planner:
             self.docs[file] = OrgDoc.load(file)
         return self.docs[file]
 
-    def add(self, file: Path, at: int, lines: list[str], path: str) -> None:
+    def add(self, file: Path, at: int, lines: list[str], path: str, entry: dict | None = None) -> None:
         """Insert in the in-memory doc (so later positions are right) and record the write."""
         wk = f"{self.key}|{file.name}|{path}"
         if wk in self.done:
             return
         self.doc(file).insert(at, lines)
-        self.writes.append(Write(file, at, list(lines), wk))
+        self.writes.append(Write(file, at, list(lines), wk, entry))
+
+    def ledger_row(self, category: str, when: str, who: str, text: str, jira: str | None, effort: str,
+                   target: str, entry: dict) -> None:
+        """Append a row to the category's table in action-items.org. A missing file gets the preamble
+        and all five sections in order; a missing section is appended at the end; a section without a
+        table gets a header."""
+        file = self.paths.ledger
+        doc = self.doc(file)
+        if not doc.lines:
+            skeleton = list(PREAMBLE)
+            for _, heading in CATEGORIES:
+                skeleton += [f"* {heading}", HEADER, RULE, ""]
+            self.add(file, 0, skeleton, "ledger/skeleton")
+        sec = section_index(doc, category)
+        if sec is None:
+            sec = len(doc.lines)
+            self.add(file, sec, [f"* {HEADING[category]}", HEADER, RULE, ""], f"ledger/{category}/section")
+        bounds = table_bounds(doc, sec)
+        if bounds is None:
+            self.add(file, sec + 1, [HEADER, RULE], f"ledger/{category}/header")
+            bounds = (sec + 1, sec + 3)
+        line = row_line(when, who, what_cell(text, jira, target), effort)
+        self.add(file, bounds[1], [line], f"{category}/{entry['locator']}", entry=entry)
 
     def group(self, file: Path, day_idx: int, d: date, name: str = CHAT_GROUP) -> int:
         """Find or create the day's `** <name> :chat:auto:` heading that chat blocks nest under."""
@@ -125,12 +165,38 @@ def plan_writes(
     now: datetime,
     today: date | None = None,
     done: frozenset[str] | set[str] = frozenset(),
+    ledger: dict | None = None,
 ) -> list[Write]:
+    """`ledger` is state.ledger: existing locators, so a repeated item gets a ` (2)` suffix."""
     today = today or now.date()
+    ledger = ledger or {}
     d = date.fromisoformat(digest["date"])
     p = _Planner(key, paths, frozenset(done))
 
     file = target_file(paths, d, today)
+    link_file = str(file.relative_to(paths.org_dir))
+    planned: set[str] = set()
+
+    def unique(obj: dict, locator_of) -> str:
+        """Suffix obj['text'] with ` (n)` until its locator is unused (or is this digest's own)."""
+        base, n = obj["text"], 1
+        while True:
+            loc = locator_of()
+            prior = ledger.get(loc)
+            if loc not in planned and (prior is None or str(prior.get("key", "")).split("|")[0] == key):
+                planned.add(loc)
+                return loc
+            n += 1
+            obj["text"] = f"{base} ({n})"
+
+    marker_headline = meeting_body(digest, people, now)[0].split(" ", 1)[1]
+    marker_target = link_target(link_file, marker_headline)
+    item_targets = [unique(it, lambda: link_target(link_file, _locator_title(it, people))) for it in digest.get("action_items") or []]
+    fu_files = [target_file(paths, date.fromisoformat(fu["when"]), today) if fu.get("when") else file for fu in digest.get("follow_ups") or []]
+    fu_targets = [unique(fu, lambda: link_target(str(ff.relative_to(paths.org_dir)), followup_headline(fu, people)))
+                  for fu, ff in zip(digest.get("follow_ups") or [], fu_files)]
+    oq_locators = [unique(q, lambda: f"{marker_target}::Open: {q['text']}") for q in digest.get("open_questions") or []]
+
     doc = p.doc(file)
     day_idx = p.day(file, d)
     # a chat day never merges into a hand-written heading: a DM with Rob is not the "Rob 1-1" notes
@@ -154,18 +220,52 @@ def plan_writes(
         heading_title = digest["title"]
         p.add(file, _append_point(doc, day_idx), meeting_block(digest, people, now, new_heading=True), f"{d.isoformat()}/{heading_title}")
 
-    link_file = str(file.relative_to(paths.org_dir))
     digest["landed"] = {"file": link_file, "heading": heading_title}  # for suggest.py's backlink
     linked = {**digest, "title": heading_title}
     for i, fu in enumerate(digest.get("follow_ups") or []):
         if not fu.get("when"):
             continue
         when = date.fromisoformat(fu["when"])
-        fu_file = target_file(paths, when, today)
+        fu_file = fu_files[i]
         fu_day = p.day(fu_file, when)
         p.add(fu_file, _append_point(p.doc(fu_file), fu_day), followup_item(fu, linked, people, link_file),
               f"{when.isoformat()}/followup/{i}")
+
+    # --- ledger rows, one per item, after the worklog writes
+    heading_key = match.link if match and match.link and JIRA_KEY_RE.fullmatch(match.link) else None
+
+    def entry(locator: str, kind: str, file_rel: str, day: date, headline: str, text: str,
+              jira: str | None, jira_source: str | None, category: str) -> dict:
+        return {"locator": locator, "key": f"{key}|{paths.ledger.name}|{category}/{locator}", "file": file_rel,
+                "day": day.isoformat(), "kind": kind, "headline": headline, "text": text, "jira": jira,
+                "jira_source": jira_source, "category": category, "done_at": None}
+
+    for it, target in zip(digest.get("action_items") or [], item_targets):
+        jira, source = (it.get("jira"), "digest") if it.get("jira") else (heading_key, "heading" if heading_key else None)
+        cat = it.get("category") or ("commitment" if people.is_me(it.get("owner")) else "waiting_on")
+        who = f"@{people.resolve(it.get('owner')) or it.get('owner') or '?'}"
+        when = org_date(date.fromisoformat(it["due"])) if it.get("due") else ""
+        p.ledger_row(cat, when, who, it["text"], jira, it.get("effort") or "", target,
+                     entry(target, "headline", link_file, d, item_headline(it, people), it["text"], jira, source, cat))
+    for fu, ff, target in zip(digest.get("follow_ups") or [], fu_files, fu_targets):
+        cat = fu.get("category") or "follow_up"
+        who = ", ".join(f"@{people.resolve(w) or w}" for w in fu.get("with") or []) or "@?"
+        when_d = date.fromisoformat(fu["when"]) if fu.get("when") else None
+        p.ledger_row(cat, org_date(when_d) if when_d else "", who, fu["text"], heading_key, fu.get("effort") or "", target,
+                     entry(target, "headline", str(ff.relative_to(paths.org_dir)), when_d or d, followup_headline(fu, people),
+                           fu["text"], heading_key, "heading" if heading_key else None, cat))
+    for q, locator in zip(digest.get("open_questions") or [], oq_locators):
+        cat = q.get("category") or "open_question"
+        p.ledger_row(cat, "", "", q["text"], heading_key, q.get("effort") or "", marker_target,
+                     entry(locator, "bullet", link_file, d, marker_headline, q["text"], heading_key,
+                           "heading" if heading_key else None, cat))
     return p.writes
+
+
+def _locator_title(item: dict, people: People) -> str:
+    """`<text> - @Owner`: the headline minus its Jira link, which would nest brackets inside the row's
+    link. nvim-orgmode resolves `::*` by prefix, so the shorter target still finds the headline."""
+    return item_headline({**item, "jira": None}, people)
 
 
 def _recently_saved(file: Path, state: State) -> bool:
@@ -191,6 +291,7 @@ def apply(writes: list[Write], state: State, dry_run: bool = False, *, force: bo
             if _recently_saved(f, state):
                 raise MtimeGuard(f"{f} was saved less than {GUARD_MINUTES} min ago; retry later or --force")
     docs = {f: OrgDoc.load(f) for f in files}
+    touched: set[tuple[Path, str]] = set()
     for w in todo:
         if dry_run:
             print(f"== {w.file}:{w.insert_at + 1}")
@@ -198,7 +299,14 @@ def apply(writes: list[Write], state: State, dry_run: bool = False, *, force: bo
             continue
         docs[w.file].insert(w.insert_at, w.lines)
         state.processed[w.write_key] = {"file": str(w.file), "line": w.insert_at + 1, "at": now.isoformat(timespec="minutes")}
+        if w.ledger_entry:
+            state.ledger[w.ledger_entry["locator"]] = w.ledger_entry
+            touched.add((w.file, w.ledger_entry["category"]))
     if not dry_run:
+        for f, category in touched:
+            sec = section_index(docs[f], category)
+            if sec is not None:
+                realign(docs[f], sec)
         for f, doc in docs.items():
             doc.save_atomic(f)
             state.own_saves[str(f)] = f.stat().st_mtime_ns
@@ -223,7 +331,8 @@ def main(argv: list[str] | None = None) -> int:
     digest = json.loads(args.digest.read_text(encoding="utf-8"))
     people = People.load(paths.people_file)
     state = State.load(paths.state_file)
-    writes = plan_writes(digest, args.key, paths, people, now, today=args.today, done=set(state.processed))
+    normalize_digest(digest, people)
+    writes = plan_writes(digest, args.key, paths, people, now, today=args.today, done=set(state.processed), ledger=state.ledger)
     if not args.dry_run:
         args.digest.write_text(json.dumps(digest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     try:

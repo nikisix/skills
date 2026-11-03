@@ -12,6 +12,7 @@ from config import Paths
 from orgfile import OrgDoc
 from people import People
 from state import State
+import ledger
 
 FIX = Path(__file__).parent / "fixtures"
 NOW = datetime(2026, 10, 22, 6, 31)
@@ -41,7 +42,7 @@ def _digest(**over):
 
 def _run(org, digest, key="k1", today=TODAY, done=frozenset()):
     paths, people, state = _setup(org)
-    writes = write_org.plan_writes(digest, key, paths, people, NOW, today=today, done=done)
+    writes = write_org.plan_writes(digest, key, paths, people, NOW, today=today, done=done, ledger=state.ledger)
     n = write_org.apply(writes, state, dry_run=False, now=NOW)
     return paths, writes, n
 
@@ -90,7 +91,7 @@ def test_dated_followup_under_target_day(org):
 def test_followup_future_month_goes_to_worklog(org):
     d = _digest(follow_ups=[{"text": "roadmap review", "with": ["Rob"], "when": "2026-11-04"}])
     paths, writes, _ = _run(org, d)
-    assert {w.file for w in writes} == {paths.worklog}
+    assert {w.file for w in writes} == {paths.worklog, paths.ledger}
     lines = (org / "worklog.org").read_text().splitlines()
     assert lines.index("* <2026-10-21 Wed>") < lines.index("* <2026-11-04 Wed>") < lines.index("* TODO")
 
@@ -100,7 +101,7 @@ def test_past_month_goes_to_archive(org):
                 follow_ups=[{"text": "sept retro", "with": ["Rob"], "when": "2026-09-20"}])
     paths, writes, _ = _run(org, d)
     arch = org / "2026" / "2026-09-worklog.org"
-    assert {w.file for w in writes} == {arch}
+    assert {w.file for w in writes} == {arch, paths.ledger}
     lines = arch.read_text().splitlines()
     assert lines[0] == "* <2026-09-15 Tue>"
     assert "** Sept planning :meeting:auto:" in lines
@@ -248,3 +249,112 @@ def test_guard_trips_on_a_human_save_after_ours(org, tmp_path):
     later = time.time() + 1
     os.utime(org / "worklog.org", (later, later))  # an editor saved after our write
     assert write_org.main([str(d2), "--key", "k2", *common]) == 3
+
+
+# --- action-items.org ledger rows --------------------------------------------
+
+OQ_TEXT = "Who owns the accuracy dashboard?"
+COMMON = ["--now", NOW.isoformat(), "--today", TODAY.isoformat()]
+
+
+def _cli(org, tmp_path, digest, key="k1"):
+    dj = tmp_path / f"{key}.json"
+    dj.write_text(json.dumps(digest))
+    return write_org.main([str(dj), "--key", key, *COMMON])
+
+
+def _rows_by_target(org):
+    led = OrgDoc.load(org / "action-items.org")
+    return led, {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(led)}
+
+
+def test_rows_land_per_category_with_links(org, tmp_path):
+    assert _cli(org, tmp_path, _digest()) == 0
+    led, by = _rows_by_target(org)
+    assert led.lines[:3] == ledger.PREAMBLE
+    heads = [l for l in led.lines if l.startswith("* ")]
+    assert heads == ["* Decision", "* Commitment", "* Waiting-on", "* Follow-up", "* Open question"]
+    r = by["worklog.org::*draft the CSV proofs runbook - @Nick"]
+    assert r.category == "commitment" and r.cells[0] == "<2026-10-23 Fri>" and r.cells[1] == "@Nick" and r.cells[3] == "M"
+    assert r.cells[2] == ("draft the CSV proofs runbook [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] "
+                          "[[file:worklog.org::*draft the CSV proofs runbook - @Nick][↗]]")
+    assert by["worklog.org::*send the sample CSV file - @Rob"].category == "waiting_on"
+    assert by["worklog.org::*send the sample CSV file - @Rob"].cells[1] == "@Rob"
+    fu = by["worklog.org::*sync with Rob on the roadmap - @Nick"]
+    assert fu.category == "follow_up" and fu.cells[1] == "@Rob" and fu.cells[0] == "<2026-10-28 Wed>"
+    oq = [r for r in ledger.rows(led) if r.category == "open_question"]
+    assert len(oq) == 1 and "meetings (auto)" in ledger.last_link_target(oq[0].cells[2]) and oq[0].cells[1] == ""
+    st = State.load(Paths(org).state_file)
+    e = st.ledger["worklog.org::*draft the CSV proofs runbook - @Nick"]
+    assert e["kind"] == "headline" and e["category"] == "commitment" and e["done_at"] is None and e["day"] == "2026-10-20"
+    assert e["jira"] == "DEV-10173" and e["jira_source"] == "digest" and e["key"].startswith("k1|action-items.org|commitment/")
+    assert e["headline"] == "draft the CSV proofs runbook - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]"
+    assert any(k.endswith("::Open: " + OQ_TEXT) for k in st.ledger)
+    q = next(v for k, v in st.ledger.items() if k.endswith("::Open: " + OQ_TEXT))
+    assert q["kind"] == "bullet" and q["headline"].startswith("meetings (auto) 2026-10-22T06:31")
+
+
+def test_rerun_adds_no_rows(org, tmp_path):
+    assert _cli(org, tmp_path, _digest()) == 0
+    n = len(ledger.rows(OrgDoc.load(org / "action-items.org")))
+    assert _cli(org, tmp_path, _digest()) == 2
+    assert len(ledger.rows(OrgDoc.load(org / "action-items.org"))) == n
+
+
+def test_locator_collision_gets_suffix(org, tmp_path):
+    assert _cli(org, tmp_path, _digest(), key="k1") == 0
+    assert _cli(org, tmp_path, _digest(date="2026-10-21", title="Rob again", follow_ups=[]), key="k2") == 0
+    text = (org / "worklog.org").read_text()
+    assert "*** TODO draft the CSV proofs runbook (2) - @Nick - [[" in text
+    st = State.load(Paths(org).state_file)
+    assert "worklog.org::*draft the CSV proofs runbook (2) - @Nick" in st.ledger
+    assert "worklog.org::*draft the CSV proofs runbook - @Nick" in st.ledger
+    assert json.loads((tmp_path / "k2.json").read_text())["action_items"][0]["text"] == "draft the CSV proofs runbook (2)"
+
+
+def test_jira_inherited_from_hand_heading(org, tmp_path):
+    wl = org / "worklog.org"
+    wl.write_text(wl.read_text().replace("** Rob 1-1\n", "** Rob 1-1 - [[https://rmt.atlassian.net/browse/DEV-77][DEV-77]]\n"))
+    old = time.time() - 3600
+    os.utime(wl, (old, old))
+    assert _cli(org, tmp_path, _digest()) == 0
+    st = State.load(Paths(org).state_file)
+    e = st.ledger["worklog.org::*send the sample CSV file - @Rob"]
+    assert e["jira"] == "DEV-77" and e["jira_source"] == "heading"
+    assert st.ledger["worklog.org::*draft the CSV proofs runbook - @Nick"]["jira_source"] == "digest"
+    _, by = _rows_by_target(org)
+    assert "[[https://rmt.atlassian.net/browse/DEV-77][DEV-77]] [[file:" in by["worklog.org::*send the sample CSV file - @Rob"].cells[2]
+    assert "*** send the sample CSV file - @Rob :waiting_on:auto:" in wl.read_text()  # headline unchanged
+
+
+def test_archive_month_row_links_archive_file(org, tmp_path):
+    assert _cli(org, tmp_path, _digest(date="2026-09-15", title="Sept planning", attendees=["Nick"], follow_ups=[])) == 0
+    _, by = _rows_by_target(org)
+    r = by["2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick"]
+    assert r.cells[2].endswith("[[file:2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick][↗]]")
+    assert State.load(Paths(org).state_file).ledger["2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick"]["file"] == "2026/2026-09-worklog.org"
+
+
+def test_deleted_heading_is_recreated_at_end(org, tmp_path):
+    ai = org / "action-items.org"
+    ai.write_text("\n".join(ledger.PREAMBLE + ["* Commitment", ledger.HEADER, ledger.RULE, ""]) + "\n")
+    old = time.time() - 3600
+    os.utime(ai, (old, old))
+    assert _cli(org, tmp_path, _digest()) == 0
+    lines = OrgDoc.load(ai).lines
+    assert lines[:3] == ledger.PREAMBLE and lines.count("* Commitment") == 1
+    assert lines.index("* Commitment") < lines.index("* Waiting-on")
+    assert len([r for r in ledger.rows(OrgDoc.load(ai)) if r.category == "commitment"]) == 2
+
+
+def test_ledger_guard_trips_independently(org, tmp_path):
+    ai = org / "action-items.org"
+    ai.write_text("\n".join(ledger.PREAMBLE) + "\n")
+    ai.touch()
+    assert _cli(org, tmp_path, _digest()) == 3
+    assert ":auto:" not in (org / "worklog.org").read_text()
+
+
+def test_digest_with_no_items_creates_no_ledger(org, tmp_path):
+    assert _cli(org, tmp_path, _digest(action_items=[], follow_ups=[], open_questions=[])) == 0
+    assert not (org / "action-items.org").exists()

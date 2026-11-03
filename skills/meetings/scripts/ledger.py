@@ -142,6 +142,30 @@ def last_link_target(cell: str) -> str | None:
     return found[-1] if found else None
 
 
+OPEN_SEP = "::Open: "
+TEXT_PREFIX = 40
+
+
+def what_text(cell: str) -> str:
+    """The item text of a WHAT cell: everything before its first org link."""
+    return cell.split(" [[", 1)[0].strip()
+
+
+def match_locator(cell: str, ledger: dict) -> str | None:
+    """The ledger key a WHAT cell belongs to: its last link target, or for an open question (several
+    rows share the block's marker link) the entry whose text starts like the cell's text."""
+    target = last_link_target(cell)
+    if target is None:
+        return None
+    if target in ledger:
+        return target
+    prefix = what_text(cell)[:TEXT_PREFIX]
+    for locator, entry in ledger.items():
+        if locator.startswith(target + OPEN_SEP) and str(entry.get("text", ""))[:TEXT_PREFIX] == prefix:
+            return locator
+    return None
+
+
 def row_line(when: str, who: str, what: str, effort: str, done: str = "") -> str:
     return f"| {when} | {who} | {what} | {effort} | {done} |"
 
@@ -161,7 +185,8 @@ def report(doc: OrgDoc, ledger: dict) -> dict:
     untracked = 0
     for row in rows(doc):
         bucket = out.setdefault(row.category, {"open": 0, "done": 0})
-        entry = ledger.get(last_link_target(row.cells[2]) or "")
+        locator = match_locator(row.cells[2], ledger)
+        entry = ledger.get(locator) if locator else None
         if entry is None:
             untracked += 1
         elif entry.get("done_at"):
