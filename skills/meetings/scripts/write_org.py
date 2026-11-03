@@ -113,7 +113,7 @@ class _Planner:
         self.writes.append(Write(file, at, list(lines), wk, entry))
 
     def ledger_row(self, category: str, when: str, who: str, text: str, jira: str | None, effort: str,
-                   target: str, entry: dict) -> None:
+                   target: str, entry: dict, done: str = "") -> None:
         """Append a row to the category's table in action-items.org. A missing file gets the preamble
         and all five sections in order; a missing section is appended at the end; a section without a
         table gets a header."""
@@ -132,7 +132,7 @@ class _Planner:
         if bounds is None:
             self.add(file, sec + 1, [HEADER, RULE], f"ledger/{category}/header")
             bounds = (sec + 1, sec + 3)
-        line = row_line(when, who, what_cell(text, jira, target), effort)
+        line = row_line(when, who, what_cell(text, jira, target), effort, done)
         self.add(file, bounds[1], [line], f"{category}/{entry['locator']}", entry=entry)
 
     def group(self, file: Path, day_idx: int, d: date, name: str = CHAT_GROUP) -> int:
