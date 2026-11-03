@@ -255,3 +255,23 @@ def test_backfill_logs_every_skip(org_dir, capsys):
     assert "k2: 'send the sample CSV file - @Rob' already rowed by k1, no row" in out
     st = State.load(paths.state_file)
     assert st.ledger["worklog.org::*send the sample CSV file - @Rob"]["key"].startswith("k1|")
+
+
+def test_backfill_classifies_and_logs_a_digest_with_no_processed_key(org_dir, capsys):
+    """`landed` recorded but no worklog write key: never landed. Say so; still persist the classification."""
+    paths, dj = _setup(org_dir, keys=[])
+    assert bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=fake_run, now=NOW) == 0
+    assert "2026-10-20-rob-1-1.json: no processed key for 'Rob 1-1' on 2026-10-20 (never landed), no rows" in capsys.readouterr().out
+    assert json.loads(dj.read_text())["action_items"][0]["category"] == "commitment"
+
+
+def test_backfill_legacy_bullet_marker_links_block_heading(org_dir):
+    """Blocks landed before the marker became a subheading have `- meetings (auto) …` as a bullet;
+    their open questions link the block heading instead."""
+    block = LEGACY_BLOCK.replace("*** meetings (auto) 2026-10-21T06:31", "   - meetings (auto) 2026-10-21T06:31")
+    paths, _ = _setup(org_dir, block=block)
+    assert bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=fake_run, now=NOW) == 6
+    e = State.load(paths.state_file).ledger["worklog.org::*Rob 1-1::Open: Who owns the accuracy dashboard?"]
+    assert e["kind"] == "bullet" and e["headline"] == "Rob 1-1"
+    oq = [r for r in ledger.rows(OrgDoc.load(paths.ledger)) if r.category == "open_question"]
+    assert len(oq) == 1 and ledger.last_link_target(oq[0].cells[2]) == "worklog.org::*Rob 1-1"

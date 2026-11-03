@@ -248,22 +248,23 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
     if qs:
         m = _marker(doc, start, end, d)
         if m is None:
-            log(f"backfill: {key}: no meetings (auto) marker under '{d['landed']['heading']}', open questions skipped")
-        else:
-            marker_headline = headline_parts(doc.lines[m])[2]
-            marker_target = link_target(link_file, marker_headline)
-            for q in qs:
-                text = q.get("text") if isinstance(q, dict) else str(q)
-                locator = f"{marker_target}::Open: {text}"
-                if rowed(locator, f"Open: {text}"):
-                    continue
-                if not any(doc.lines[j].strip() == f"- Open: {text}" for j in range(m, doc.section_end(m))):
-                    log(f"backfill: {key}: open question '{text}' not found under the marker, skipped")
-                    continue
-                cat = q.get("category", "open_question") if isinstance(q, dict) else "open_question"
-                effort = (q.get("effort") if isinstance(q, dict) else None) or ""
-                p.ledger_row(cat, "", "", text, None, effort, marker_target,
-                             entry(locator, "bullet", link_file, day, marker_headline, text, None, cat, None))
+            # a block landed before the marker became a subheading (`- meetings (auto) …` bullet):
+            # the block heading is the nearest headline the row can link
+            m = start
+        marker_headline = headline_parts(doc.lines[m])[2]
+        marker_target = link_target(link_file, marker_headline)
+        for q in qs:
+            text = q.get("text") if isinstance(q, dict) else str(q)
+            locator = f"{marker_target}::Open: {text}"
+            if rowed(locator, f"Open: {text}"):
+                continue
+            if not any(doc.lines[j].strip() == f"- Open: {text}" for j in range(m, doc.section_end(m))):
+                log(f"backfill: {key}: open question '{text}' not found under the marker, skipped")
+                continue
+            cat = q.get("category", "open_question") if isinstance(q, dict) else "open_question"
+            effort = (q.get("effort") if isinstance(q, dict) else None) or ""
+            p.ledger_row(cat, "", "", text, None, effort, marker_target,
+                         entry(locator, "bullet", link_file, day, marker_headline, text, None, cat, None))
     return p.writes
 
 
@@ -290,14 +291,16 @@ def backfill(paths: Paths, state: State, people: People, since: date | None, dry
         d = json.loads(dj.read_text(encoding="utf-8"))
         if not d.get("date") or (since and date.fromisoformat(d["date"]) < since):
             continue
-        key = landed_key(d, state)
-        if key is None:
-            continue
         landed_jira = [it.get("jira") for it in d.get("action_items") or []]
         if needs_classification(d):
             classify(d, ticket_candidates(paths, date.fromisoformat(d["date"])), run=run, people=people)
             if not dry_run:
                 dj.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        key = landed_key(d, state)
+        if key is None:
+            if d.get("landed"):
+                print(f"backfill: {dj.name}: no processed key for '{d['landed']['heading']}' on {d['date']} (never landed), no rows")
+            continue
         writes = plan_rows(d, key, paths, people, state, now, print, landed_jira)
         rows = [w for w in writes if w.ledger_entry]
         if not rows:
