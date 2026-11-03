@@ -118,3 +118,45 @@ def test_org_text_sanitizer():
     assert org_text("Line one.\n* TODO x\n- y") == "Line one. * TODO x - y"
     assert org_text("** heading-like") == "heading-like"
     assert org_text(None) == ""
+
+
+def test_headline_parts():
+    from orgfile import headline_parts
+
+    assert headline_parts("*** TODO Ship it - @Nick - [[u][DEV-1]] :commitment:auto:") == (
+        3, "TODO", "Ship it - @Nick - [[u][DEV-1]]", ["commitment", "auto"])
+    assert headline_parts("** Plain") == (2, None, "Plain", [])
+    assert headline_parts("- not a headline") is None
+
+
+def test_set_keyword_and_tags():
+    doc = OrgDoc(["*** TODO Ship it - @Nick :auto:"])
+    assert doc.set_keyword(0, "DONE") == "*** DONE Ship it - @Nick :auto:"
+    assert doc.set_tags(0, ["in_review", "auto"]) == "*** DONE Ship it - @Nick :in_review:auto:"
+    assert doc.set_tags(0, []) == "*** DONE Ship it - @Nick"
+    doc2 = OrgDoc(["*** Ship it"])
+    assert doc2.set_keyword(0, "DONE") == "*** DONE Ship it"
+    assert doc2.lines[0] == "*** DONE Ship it"
+
+
+def test_replace_line():
+    doc = OrgDoc(["a", "b"])
+    doc.replace_line(1, "c")
+    assert doc.lines == ["a", "c"]
+
+
+def test_move_section_forward_and_backward():
+    doc = OrgDoc(["* A", "** t1", "body", "* B", "** t2", "", "* C"])
+    new = doc.move_section(1, 3)  # t1 -> end of B (before B's trailing blank)
+    assert doc.lines == ["* A", "* B", "** t2", "** t1", "body", "", "* C"] and new == 3
+    new = doc.move_section(3, 0)  # back to A
+    assert doc.lines[:3] == ["* A", "** t1", "body"] and new == 1
+    assert doc.lines[3:] == ["* B", "** t2", "", "* C"]
+
+
+def test_find_headline_scoped():
+    doc = OrgDoc(["* D1", "** TODO x - @Nick :auto:", "* D2", "** DONE x - @Nick :auto:"])
+    assert doc.find_headline("x - @Nick") == 1
+    assert doc.find_headline("x - @Nick", start=2) == 3
+    assert doc.find_headline("x - @Nick", start=0, end=1) is None
+    assert doc.find_headline("nope") is None

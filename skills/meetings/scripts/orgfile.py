@@ -1,6 +1,5 @@
-"""Minimal org-mode file model: day headers, headings, subtree bounds, ordered insertion, atomic save.
-
-Only additions are ever made to a document; existing lines are never rewritten.
+"""Minimal org-mode file model: day headers, headings, subtree bounds, ordered insertion, atomic save,
+and the few in-place edits done-sync makes (keyword, tags, subtree move).
 """
 
 from __future__ import annotations
@@ -34,6 +33,28 @@ def plain_title(s: str) -> str:
     s = INLINE_LINK_RE.sub(lambda m: m.group(2) or m.group(1), s)
     return re.sub(r"\s+", " ", URL_RE.sub("", s)).strip()
 DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def headline_parts(line: str) -> tuple[int, str | None, str, list[str]] | None:
+    """(level, keyword, title without tags, tags) for a headline, else None. The title keeps links and
+    the owner suffix verbatim: it is the locator form nvim-orgmode matches `::*` links against."""
+    m = HEADLINE_RE.match(line)
+    if not m:
+        return None
+    stars, rest = m.groups()
+    tags: list[str] = []
+    if tm := TAGS_RE.match(rest):
+        rest, tags = tm.group(1), [t for t in tm.group(2).split(":") if t]
+    keyword = None
+    if km := KEYWORD_RE.match(rest):
+        keyword, rest = km.groups()
+    return len(stars), keyword, rest.strip(), tags
+
+
+def _headline(level: int, keyword: str | None, title: str, tags: list[str]) -> str:
+    kw = f"{keyword} " if keyword else ""
+    tag = f" :{':'.join(tags)}:" if tags else ""
+    return f"{'*' * level} {kw}{title}{tag}"
 
 
 def day_header(d: date) -> str:
@@ -155,3 +176,42 @@ class OrgDoc:
 
     def insert(self, at: int, new_lines: list[str]) -> None:
         self.lines[at:at] = list(new_lines)
+
+    # --- in-place edits (done-sync only) -------------------------------------
+
+    def replace_line(self, idx: int, new: str) -> None:
+        self.lines[idx] = new
+
+    def set_keyword(self, idx: int, keyword: str) -> str:
+        level, _, title, tags = headline_parts(self.lines[idx])
+        self.lines[idx] = _headline(level, keyword, title, tags)
+        return self.lines[idx]
+
+    def set_tags(self, idx: int, tags: list[str]) -> str:
+        level, keyword, title, _ = headline_parts(self.lines[idx])
+        self.lines[idx] = _headline(level, keyword, title, list(tags))
+        return self.lines[idx]
+
+    def find_headline(self, title: str, start: int = 0, end: int | None = None) -> int | None:
+        """First headline in [start, end) whose title (keyword and tags stripped) equals `title`."""
+        for j in range(start, len(self.lines) if end is None else end):
+            parts = headline_parts(self.lines[j])
+            if parts and parts[2] == title:
+                return j
+        return None
+
+    def move_section(self, idx: int, to_parent_idx: int) -> int:
+        """Move the subtree at `idx` to the end of the section rooted at `to_parent_idx` (before its
+        trailing blank lines). Returns the subtree's new index."""
+        end = self.section_end(idx)
+        while end - 1 > idx and self.lines[end - 1] == "":
+            end -= 1  # trailing blank lines are spacing, not content: they stay behind
+        block = self.lines[idx:end]
+        del self.lines[idx:end]
+        if to_parent_idx > idx:
+            to_parent_idx -= len(block)
+        at = self.section_end(to_parent_idx)
+        while at - 1 > to_parent_idx and self.lines[at - 1] == "":
+            at -= 1
+        self.lines[at:at] = block
+        return at
