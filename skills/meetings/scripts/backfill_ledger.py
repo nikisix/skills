@@ -216,7 +216,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
         cat = it.get("category") or ("commitment" if people.is_me(it.get("owner")) else "waiting_on")
         who = f"@{people.resolve(it.get('owner')) or it.get('owner') or '?'}"
         when = org_date(date.fromisoformat(it["due"])) if it.get("due") else ""
-        p.ledger_row(cat, when, who, it["text"], it.get("jira"), it.get("effort") or "", target,
+        p.ledger_row(cat, when, who, it["text"], it.get("jira"), target,
                      entry(target, "headline", link_file, day, headline, it["text"], it.get("jira"), cat, done_at,
                            "digest" if it.get("jira") == was else "classify"), done)
     for i, fu in enumerate(d.get("follow_ups") or []):
@@ -252,7 +252,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             log(f"backfill: {key}: '{headline}' not found in {frel}, skipped")
             continue
         done, done_at = done_of(hdoc, h)
-        p.ledger_row(cat, when_s, who, fu["text"], None, fu.get("effort") or "", target,
+        p.ledger_row(cat, when_s, who, fu["text"], None, target,
                      entry(target, "headline", frel, day_s, headline, fu["text"], None, cat, done_at), done)
     qs = d.get("open_questions") or []
     if qs:
@@ -272,8 +272,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
                 log(f"backfill: {key}: open question '{text}' not found under the marker, skipped")
                 continue
             cat = q.get("category", "open_question") if isinstance(q, dict) else "open_question"
-            effort = (q.get("effort") if isinstance(q, dict) else None) or ""
-            p.ledger_row(cat, "", "", text, None, effort, marker_target,
+            p.ledger_row(cat, "", "", text, None, marker_target,
                          entry(locator, "bullet", link_file, day, marker_headline, text, None, cat, None))
     return p.writes
 

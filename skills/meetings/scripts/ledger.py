@@ -1,7 +1,7 @@
 """action-items.org: one table per category, rows appended by the writer, ticked by hand.
 
-Columns: EFFORT, DONE, WHEN, WHO, WHAT. A table is at most MAX_WIDTH characters wide: a long WHAT is
-wrapped onto continuation rows whose other four cells are blank, and `rows()` joins them back into
+Columns: DONE, WHEN, WHO, WHAT. A table is at most MAX_WIDTH characters wide: a long WHAT is
+wrapped onto continuation rows whose other three cells are blank, and `rows()` joins them back into
 one logical row. Row identity is the last `[[file:…][…]]` link in WHAT (the worklog locator).
 Realignment only changes whitespace, so hand edits to any cell survive.
 """
@@ -25,10 +25,11 @@ CATEGORIES: list[tuple[str, str]] = [
 ]
 HEADING = dict(CATEGORIES)
 PREAMBLE = ["#+TITLE: Action items", "#+STARTUP: showall", ""]
-COLUMNS = ["EFFORT", "DONE", "WHEN", "WHO", "WHAT"]
+COLUMNS = ["DONE", "WHEN", "WHO", "WHAT"]
 WHAT = COLUMNS.index("WHAT")
-HEADER = "| EFFORT | DONE | WHEN | WHO | WHAT |"
-RULE = "|--------+------+------+-----+------|"
+HEADER = "| DONE | WHEN | WHO | WHAT |"
+RULE = "|------+------+-----+------|"
+RETIRED_COLUMNS = {"EFFORT"}  # headers `reformat` still recognizes and drops
 MAX_WIDTH = 140
 LOCATOR_MAX = 56  # link target length; `[[file:…][↗]]` adds 12, which must fit the WHAT column
 TOKEN_RE = re.compile(r"\[\[.*?\]\]|\S+")
@@ -51,20 +52,16 @@ class Row:
         self.end = self.end or self.idx + 1
 
     @property
-    def effort(self) -> str:
+    def done(self) -> str:
         return self.cells[0]
 
     @property
-    def done(self) -> str:
+    def when(self) -> str:
         return self.cells[1]
 
     @property
-    def when(self) -> str:
-        return self.cells[2]
-
-    @property
     def who(self) -> str:
-        return self.cells[3]
+        return self.cells[2]
 
     @property
     def what(self) -> str:
@@ -113,7 +110,7 @@ def table_bounds(doc: OrgDoc, section_idx: int) -> tuple[int, int] | None:
 
 
 def _is_header(cells: list[str]) -> bool:
-    return bool(cells) and cells[0].upper() in COLUMNS
+    return bool(cells) and cells[0].upper() in (*COLUMNS, *RETIRED_COLUMNS)
 
 
 def _is_continuation(cells: list[str]) -> bool:
@@ -255,8 +252,8 @@ def match_locator(cell: str, ledger: dict) -> str | None:
     return close[0] if len(close) == 1 else None
 
 
-def row_line(effort: str, done: str, when: str, who: str, what: str) -> str:
-    return f"| {effort} | {done} | {when} | {who} | {what} |"
+def row_line(done: str, when: str, who: str, what: str) -> str:
+    return f"| {done} | {when} | {who} | {what} |"
 
 
 def wrap_what(text: str, width: int) -> list[str]:
@@ -294,16 +291,16 @@ def what_width(doc: OrgDoc, section_idx: int, extra: list[str] | None = None) ->
     return _what_width_for(_fixed_widths(doc, section_idx, extra))
 
 
-def _lines_for(effort: str, done: str, when: str, who: str, what: str, width: int) -> list[str]:
+def _lines_for(done: str, when: str, who: str, what: str, width: int) -> list[str]:
     chunks = wrap_what(what, width)
-    return [row_line(effort, done, when, who, chunks[0])] + [row_line("", "", "", "", c) for c in chunks[1:]]
+    return [row_line(done, when, who, chunks[0])] + [row_line("", "", "", c) for c in chunks[1:]]
 
 
-def row_lines(doc: OrgDoc, section_idx: int, effort: str, done: str, when: str, who: str, what: str) -> list[str]:
+def row_lines(doc: OrgDoc, section_idx: int, done: str, when: str, who: str, what: str) -> list[str]:
     """The physical lines for one logical row: the first carries every cell, continuation rows only WHAT.
     Wrapped to the width the table's current content leaves (a wider fixed cell later pushes earlier
     rows past MAX_WIDTH; `--reformat` re-wraps the whole table)."""
-    return _lines_for(effort, done, when, who, what, what_width(doc, section_idx, [effort, done, when, who, ""]))
+    return _lines_for(done, when, who, what, what_width(doc, section_idx, [done, when, who, ""]))
 
 
 def migrate_locators(doc: OrgDoc, state) -> int:
@@ -345,7 +342,8 @@ def migrate_locators(doc: OrgDoc, state) -> int:
 
 def reformat(doc: OrgDoc, state=None) -> int:
     """Rebuild every category table in COLUMNS order with wrapped WHAT cells. Cells are mapped by the
-    table's own header names, so a file in the old WHEN/WHO/WHAT/EFFORT/DONE order converts. With
+    table's own header names, so a file in an older order converts and a retired column (EFFORT) is
+    dropped. With
     `state`, link targets are shortened first (migrate_locators). Returns the number of logical
     rows. Idempotent."""
     if state is not None:
@@ -376,7 +374,7 @@ def reformat(doc: OrgDoc, state=None) -> int:
         fixed = [max([len(n)] + [len(r[n]) for r in logical]) for n in COLUMNS if n != "WHAT"]
         width = _what_width_for(fixed)
         doc.lines[start:stop] = [HEADER, RULE] + [
-            line for r in logical for line in _lines_for(r["EFFORT"], r["DONE"], r["WHEN"], r["WHO"], r["WHAT"], width)]
+            line for r in logical for line in _lines_for(r["DONE"], r["WHEN"], r["WHO"], r["WHAT"], width)]
         realign(doc, sec)
         total += len(logical)
     return total
@@ -411,7 +409,7 @@ def report(doc: OrgDoc, ledger: dict) -> dict:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Summarize action-items.org against the ledger state.")
-    parser.add_argument("--reformat", action="store_true", help="rewrite every table in EFFORT/DONE/WHEN/WHO/WHAT order, wrapped to the width")
+    parser.add_argument("--reformat", action="store_true", help="rewrite every table in DONE/WHEN/WHO/WHAT order, wrapped to the width")
     add_org_dir_arg(parser)
     args = parse_args_or_none(parser, argv)
     if args is None:

@@ -126,7 +126,7 @@ class _Planner:
         self.doc(file).insert(at, lines)
         self.writes.append(Write(file, at, list(lines), wk, entry))
 
-    def ledger_row(self, category: str, when: str, who: str, text: str, jira: str | None, effort: str,
+    def ledger_row(self, category: str, when: str, who: str, text: str, jira: str | None,
                    target: str, entry: dict, done: str = "") -> None:
         """Append a row to the category's table in action-items.org. A missing file gets the preamble
         and all five sections in order; a missing section is appended at the end; a section without a
@@ -146,7 +146,7 @@ class _Planner:
         if bounds is None:
             self.add(file, sec + 1, [HEADER, RULE], f"ledger/{category}/header")
             bounds = (sec + 1, sec + 3)
-        lines = row_lines(doc, sec, effort, done, when, who, what_cell(text, jira, target))
+        lines = row_lines(doc, sec, done, when, who, what_cell(text, jira, target))
         self.add(file, bounds[1], lines, f"{category}/{entry['locator']}", entry=entry)
 
     def group(self, file: Path, day_idx: int, d: date, name: str = CHAT_GROUP) -> int:
@@ -267,18 +267,18 @@ def plan_writes(
         cat = it.get("category") or ("commitment" if people.is_me(it.get("owner")) else "waiting_on")
         who = f"@{people.resolve(it.get('owner')) or it.get('owner') or '?'}"
         when = org_date(date.fromisoformat(it["due"])) if it.get("due") else ""
-        p.ledger_row(cat, when, who, it["text"], jira, it.get("effort") or "", target,
+        p.ledger_row(cat, when, who, it["text"], jira, target,
                      entry(target, "headline", link_file, d, item_headline(it, people), it["text"], jira, source, cat))
     for fu, ff, target in zip(digest.get("follow_ups") or [], fu_files, fu_targets):
         cat = fu.get("category") or "follow_up"
         who = ", ".join(f"@{people.resolve(w) or w}" for w in fu.get("with") or []) or "@?"
         when_d = date.fromisoformat(fu["when"]) if fu.get("when") else None
-        p.ledger_row(cat, org_date(when_d) if when_d else "", who, fu["text"], heading_key, fu.get("effort") or "", target,
+        p.ledger_row(cat, org_date(when_d) if when_d else "", who, fu["text"], heading_key, target,
                      entry(target, "headline", str(ff.relative_to(paths.org_dir)), when_d or d, followup_headline(fu, people),
                            fu["text"], heading_key, "heading" if heading_key else None, cat))
     for q, locator in zip(digest.get("open_questions") or [], oq_locators):
         cat = q.get("category") or "open_question"
-        p.ledger_row(cat, "", "", q["text"], heading_key, q.get("effort") or "", marker_target,
+        p.ledger_row(cat, "", "", q["text"], heading_key, marker_target,
                      entry(locator, "bullet", link_file, d, marker_headline, q["text"], heading_key,
                            "heading" if heading_key else None, cat))
     return p.writes

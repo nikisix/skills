@@ -20,7 +20,7 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 |---|---|
 | File | `action-items.org` next to `worklog.org`, top-level heading per category, one table each |
 | Categories, in this order | **Decision** (unresolved, needs more discussion or a meeting) · **Commitment** (what Nick committed to, new TODOs) · **Waiting-on** (what Nick is waiting on) · **Follow-up** (a follow-up task) · **Open question** (unresolved, including disagreements) |
-| Columns | `WHEN · WHO · WHAT · EFFORT · DONE` |
+| Columns | `DONE · WHEN · WHO · WHAT` (EFFORT was a column until 2026-11-03; the digest keeps the field, the table does not show it) |
 | Ownership | Nick's file: he checks rows off and edits them. The pipeline appends rows and never rewrites a row |
 | Check-off semantics | `x` in DONE = finished from Nick's side: worklog item -> `DONE` + `CLOSED:`; a tron **sub-task** gets `:closed:`; a whole tron **task** moves to **In Review**. Any other word names the tron bucket directly (`review`, `qa`, `ready`, `accepted`, `closed`, `blocked`, `todo`, `progress`, `refine`, `maybe`) and still closes the worklog item |
 | Tagging | Every digested item carries its category; worklog headlines get it as an org tag (`:commitment:auto:`) |
@@ -32,10 +32,10 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 
 | Call | Choice | Why |
 |---|---|---|
-| EFFORT scale | `S` / `M` / `L`, estimated by the model, blank when it cannot say | Three buckets is what a glance can use; hours would be false precision from a transcript |
+| EFFORT scale (digest field only) | `S` / `M` / `L`, estimated by the model, null when it cannot say; recorded in the digest, no longer a ledger column | Three buckets is what a glance can use; hours would be false precision from a transcript |
 | Row locator | The WHAT cell ends with an org link to the worklog item; that link target is the row's identity in `state.json`. No ID column | Keeps Nick's five columns; the link doubles as "jump to source" |
 | Link target form | The headline **without keyword and tags**, cut at a word boundary so the whole target stays within 56 characters: `worklog.org::*<headline prefix>`. nvim-orgmode resolves `::*` by a lowercased prefix match on the title with the tag node stripped, so a target carrying `:commitment:auto:` never matches and a shortened one still does. A prefix another row already uses is extended word by word (`short_target`); a dangling `-` or `·` is dropped | Same string is the state identity and what done-sync and backfill match on; a full headline (median 118 characters) cannot fit a 140-wide table |
-| Table width and column order | `\| EFFORT \| DONE \| WHEN \| WHO \| WHAT \|`, lines at most 140 characters. WHAT wraps at word boundaries (links never split) onto continuation rows whose four fixed cells are blank; the last chunk ends with the ↗ link, which distinguishes a continuation row from an open-question row. `ledger.py --reformat` rebuilds every table to this layout (and migrates full-headline targets plus their state keys); a plain append wraps to the width the table currently leaves | The narrow fixed columns first keep the triage cells visible; one hard width keeps the file readable in a terminal |
+| Table width and column order | `\| DONE \| WHEN \| WHO \| WHAT \|`, lines at most 140 characters. WHAT wraps at word boundaries (links never split) onto continuation rows whose three fixed cells are blank; the last chunk ends with the ↗ link, which distinguishes a continuation row from an open-question row. `ledger.py --reformat` rebuilds every table to this layout (migrates full-headline targets plus their state keys, and drops a retired EFFORT column); a plain append wraps to the width the table currently leaves | The narrow fixed columns first keep the triage cells visible; one hard width keeps the file readable in a terminal |
 | Open questions in worklog | Stay as `- Open:` bullets under the marker; done = bullet becomes `- Resolved [date]:` | They never were headlines; turning them into headlines would change the worklog shape already approved |
 | Locator uniqueness | A locator already present in `state.ledger` (any day, any file) gets ` (2)`, ` (3)` appended to the worklog headline at landing | Two Slack days can yield identical items; done-sync's file-wide search needs unique targets |
 | Jira sync direction | Documented in the runbook: jira-sync's default pass is Jira -> org and would revert a done-sync bucket move; the move reaches Jira only when Nick runs the org -> Jira direction | Not this project's code, but the user must know which run to do next |
@@ -59,14 +59,14 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 #+STARTUP: showall
 
 * Decision
-| EFFORT | DONE | WHEN             | WHO    | WHAT                                                                                           |
-|--------+------+------------------+--------+------------------------------------------------------------------------------------------------|
-| M      |      | <2026-10-28 Wed> | @Mitch | Quick call to resolve how statutory classification and state scoping will work for Statutory   |
-|        |      |                  |        | Disability / PFML. [[file:worklog.org::*Quick call to resolve how statutory][↗]]               |
+| DONE | WHEN             | WHO    | WHAT                                                                                                    |
+|------+------------------+--------+---------------------------------------------------------------------------------------------------------|
+|      | <2026-10-28 Wed> | @Mitch | Quick call to resolve how statutory classification and state scoping will work for Statutory Disability |
+|      |                  |        | / PFML. [[file:worklog.org::*Quick call to resolve how statutory][↗]]                                   |
 
 * Commitment
-| EFFORT | DONE | WHEN | WHO | WHAT |
-|--------+------+------+-----+------|
+| DONE | WHEN | WHO | WHAT |
+|------+------+-----+------|
 
 * Waiting-on
 ...
@@ -86,11 +86,11 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
   the roster (owner for action items, the `with` list for follow-ups, `@?` when unknown; for
   Waiting-on this is the person owing the item). **WHAT** the item text, then one space, then the
   locator link `[[file:worklog.org::*<headline prefix>][↗]]` (or `[[file:2026/2026-09-worklog.org::*…][↗]]`
-  for a past month; for an open question the block marker's target). **EFFORT** `S` / `M` / `L` or
-  blank. **DONE** blank. Columns are written in the order EFFORT, DONE, WHEN, WHO, WHAT.
+  for a past month; for an open question the block marker's target). **DONE** blank. Columns are
+  written in the order DONE, WHEN, WHO, WHAT.
 - Wrapping: WHAT is cut at word boundaries into chunks that keep the line within 140 characters given
   the table's current fixed-column widths; chunks after the first go on continuation rows with blank
-  EFFORT/DONE/WHEN/WHO. Links are never split.
+  DONE/WHEN/WHO. Links are never split.
 - Realignment: after appending, the writer pads every cell of that table to the column's widest cell.
   No other change to existing rows is ever made. `ledger.py --reformat` is the one deliberate rewrite:
   it rebuilds every table (same cells, new line breaks and padding) and is idempotent.

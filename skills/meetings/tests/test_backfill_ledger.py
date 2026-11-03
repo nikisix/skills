@@ -197,7 +197,7 @@ def test_backfill_dry_run_writes_nothing(org_dir, capsys):
     before = dj.read_text()
     assert bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, True, run=fake_run, now=NOW) == 6
     assert dj.read_text() == before and not paths.ledger.exists()
-    assert "| M |  | <2026-10-23 Fri> | @Nick | draft the CSV proofs runbook" in capsys.readouterr().out
+    assert "|  | <2026-10-23 Fri> | @Nick | draft the CSV proofs runbook" in capsys.readouterr().out
     assert State.load(paths.state_file).ledger == {}
 
 

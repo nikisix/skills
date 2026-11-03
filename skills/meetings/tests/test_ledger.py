@@ -24,19 +24,19 @@ def test_split_cells_tolerant():
 
 
 def test_rows_and_bounds():
-    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, "| S | x | <2026-10-22 Wed> | @Nick | Ship it [[file:worklog.org::*Ship it - @Nick][↗]] |", "", "* Follow-up", HEADER, RULE])
+    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, "| x | <2026-10-22 Wed> | @Nick | Ship it [[file:worklog.org::*Ship it - @Nick][↗]] |", "", "* Follow-up", HEADER, RULE])
     assert table_bounds(doc, 3) == (4, 7)
     r = rows(doc)
-    assert len(r) == 1 and r[0].category == "commitment" and r[0].done == "x" and r[0].effort == "S"
+    assert len(r) == 1 and r[0].category == "commitment" and r[0].done == "x"
     assert last_link_target(r[0].what) == "worklog.org::*Ship it - @Nick"
 
 
 def test_realign_pads_all_rows_whitespace_only():
-    doc = OrgDoc(["* Decision", "| EFFORT | DONE | WHEN | WHO | WHAT |", "|---+---+---+---+---|", "|M||<2026-10-22 Wed>|@Mitch|Call|"])
+    doc = OrgDoc(["* Decision", "| DONE | WHEN | WHO | WHAT |", "|---+---+---+---|", "||<2026-10-22 Wed>|@Mitch|Call|"])
     before = [split_cells(l) for l in doc.lines[1:] if not is_rule(l)]
     realign(doc, 0)
-    assert doc.lines[3] == "| M      |      | <2026-10-22 Wed> | @Mitch | Call |"
-    assert doc.lines[2] == "|--------+------+------------------+--------+------|"
+    assert doc.lines[3] == "|      | <2026-10-22 Wed> | @Mitch | Call |"
+    assert doc.lines[2] == "|------+------------------+--------+------|"
     assert [split_cells(l) for l in doc.lines[1:] if not is_rule(l)] == before
 
 
@@ -50,9 +50,9 @@ def test_normalize_done():
 
 def test_report_counts(org_dir):
     doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE,
-        "| | x | | @Nick | a [[file:worklog.org::*a - @Nick][↗]] |",
-        "| | | | @Nick | b [[file:worklog.org::*b - @Nick][↗]] |",
-        "| | | | @Nick | hand-written row |"])
+        "| x | | @Nick | a [[file:worklog.org::*a - @Nick][↗]] |",
+        "| | | @Nick | b [[file:worklog.org::*b - @Nick][↗]] |",
+        "| | | @Nick | hand-written row |"])
     led = {"worklog.org::*a - @Nick": {"done_at": "2026-10-22T07:00"}, "worklog.org::*b - @Nick": {"done_at": None}}
     assert report(doc, led) == {"commitment": {"open": 1, "done": 1}, "untracked": 1}
 
@@ -70,7 +70,7 @@ def test_match_locator_open_question_by_link_and_text_prefix():
     assert match_locator(f"a [[file:worklog.org::*a - @Nick][↗]]", led) == "worklog.org::*a - @Nick"
     assert match_locator("hand-written row", led) is None
     assert match_locator(f"rewritten text [[file:{marker}][↗]]", led) is None
-    doc = OrgDoc(PREAMBLE + ["* Open question", HEADER, RULE, f"| | x | | | {cell} |"])
+    doc = OrgDoc(PREAMBLE + ["* Open question", HEADER, RULE, f"| x | | | {cell} |"])
     assert report(doc, led) == {"open_question": {"open": 1, "done": 0}, "untracked": 0}
 
 
@@ -88,10 +88,10 @@ def test_match_locator_prefers_exact_text_and_refuses_ambiguous_prefix():
 
 
 
-def test_header_puts_effort_and_done_first():
-    assert HEADER == "| EFFORT | DONE | WHEN | WHO | WHAT |"
-    assert RULE == "|--------+------+------+-----+------|"
-    assert row_line("S", "x", "<2026-10-22 Wed>", "@Nick", "Ship it") == "| S | x | <2026-10-22 Wed> | @Nick | Ship it |"
+def test_header_puts_done_first_and_has_no_effort():
+    assert HEADER == "| DONE | WHEN | WHO | WHAT |"
+    assert RULE == "|------+------+-----+------|"
+    assert row_line("x", "<2026-10-22 Wed>", "@Nick", "Ship it") == "| x | <2026-10-22 Wed> | @Nick | Ship it |"
 
 
 def test_wrap_what_keeps_links_whole():
@@ -107,10 +107,10 @@ def test_wrap_what_keeps_links_whole():
 def test_rows_join_continuation_rows():
     link = "[[file:worklog.org::*Ship it - @Nick][↗]]"
     doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE,
-        "| S | x | <2026-10-22 Wed> | @Nick | Ship it with a very long |",
-        "|   |   |                  |       | explanation |",
-        f"|   |   |                  |       | {link} |",
-        "| M |   |                  | @Rob  | second |"])
+        "| x | <2026-10-22 Wed> | @Nick | Ship it with a very long |",
+        "|   |                  |       | explanation |",
+        f"|   |                  |       | {link} |",
+        "|   |                  | @Rob  | second |"])
     r = rows(doc)
     assert [x.what for x in r] == [f"Ship it with a very long explanation {link}", "second"]
     assert r[0].idx == 6 and r[0].end == 9 and r[1].idx == 9 and r[0].done == "x"
@@ -122,8 +122,8 @@ def test_rows_keep_open_questions_with_blank_cells_apart():
     WHAT already ends with its link is complete, so the next blank-celled line is a new row."""
     m = "[[file:worklog.org::*meetings (auto) 2026-10-22T06:31 · source:][↗]]"
     doc = OrgDoc(PREAMBLE + ["* Open question", HEADER, RULE,
-        f"|  |  |  |  | why? {m} |", f"|  |  |  |  | how? {m} |",
-        "|  |  |  |  | and a long one that |", f"|  |  |  |  | wraps {m} |"])
+        f"|  |  |  | why? {m} |", f"|  |  |  | how? {m} |",
+        "|  |  |  | and a long one that |", f"|  |  |  | wraps {m} |"])
     assert [x.what for x in rows(doc)] == [f"why? {m}", f"how? {m}", f"and a long one that wraps {m}"]
 
 
@@ -133,8 +133,8 @@ def test_reformat_wraps_every_row_to_the_sections_final_widths(org_dir):
     st = State.load(Paths(org_dir).state_file)
     link = "[[file:worklog.org::*Ship it][↗]]"
     doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE,
-        f"| S | | | @Nick | {' '.join(['lorem'] * 40)} {link} |",
-        f"| S | | <2026-10-22 Wed> | @Abhi, @David, @Mitch, @Jayson | tiny {link} |", ""])
+        f"| | | @Nick | {' '.join(['lorem'] * 40)} {link} |",
+        f"| | <2026-10-22 Wed> | @Abhi, @David, @Mitch, @Jayson | tiny {link} |", ""])
     reformat(doc, st)
     assert all(len(l) <= MAX_WIDTH for l in doc.lines if l.startswith("|")), max(len(l) for l in doc.lines)
     assert [x.who for x in rows(doc)] == ["@Nick", "@Abhi, @David, @Mitch, @Jayson"]
@@ -142,11 +142,11 @@ def test_reformat_wraps_every_row_to_the_sections_final_widths(org_dir):
 
 def test_row_lines_wrap_to_table_width():
     from ledger import MAX_WIDTH, row_lines, section_index
-    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, "| M | | <2026-10-22 Wed> | @Abhi, @David, @Joseph | short |", ""])
+    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, "| | <2026-10-22 Wed> | @Abhi, @David, @Joseph | short |", ""])
     what = " ".join(f"word{i}" for i in range(40)) + " [[file:worklog.org::*x - @Nick][↗]]"
-    lines = row_lines(doc, section_index(doc, "commitment"), "S", "", "", "@Nick", what)
-    assert len(lines) > 1 and lines[0].startswith("| S |  |  | @Nick | word0 ")
-    assert all(split_cells(l)[:4] == ["", "", "", ""] for l in lines[1:])
+    lines = row_lines(doc, section_index(doc, "commitment"), "", "", "@Nick", what)
+    assert len(lines) > 1 and lines[0].startswith("|  |  | @Nick | word0 ")
+    assert all(split_cells(l)[:3] == ["", "", ""] for l in lines[1:])
     doc.insert(7, lines)
     realign(doc, section_index(doc, "commitment"))
     assert all(len(l) <= MAX_WIDTH for l in doc.lines[4:] if l.startswith("|"))
@@ -174,8 +174,8 @@ def test_migrate_locators_rewrites_links_state_and_processed(org_dir):
     st.ledger[old_m + "::Open: why?"] = {"locator": old_m + "::Open: why?", "key": f"k1|action-items.org|open_question/{old_m}::Open: why?", "headline": marker, "text": "why?", "kind": "bullet"}
     st.ledger[old_m + "::Open: how?"] = {"locator": old_m + "::Open: how?", "key": f"k1|action-items.org|open_question/{old_m}::Open: how?", "headline": marker, "text": "how?", "kind": "bullet"}
     st.processed[f"k1|action-items.org|commitment/{old_t}"] = {"at": "x"}
-    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, f"| L |  |  | @Nick | b [[file:{old_t}][↗]] |", "",
-                            "* Open question", HEADER, RULE, f"|  |  |  |  | why? [[file:{old_m}][↗]] |", f"|  |  |  |  | how? [[file:{old_m}][↗]] |"])
+    doc = OrgDoc(PREAMBLE + ["* Commitment", HEADER, RULE, f"|  |  | @Nick | b [[file:{old_t}][↗]] |", "",
+                            "* Open question", HEADER, RULE, f"|  |  |  | why? [[file:{old_m}][↗]] |", f"|  |  |  | how? [[file:{old_m}][↗]] |"])
     assert migrate_locators(doc, st) == 2
     new_t, new_m = "worklog.org::*build a proof-diff tool for CSV exports", "worklog.org::*meetings (auto) 2026-10-22T06:31 · source:"
     assert last_link_target(rows(doc)[0].what) == new_t and [last_link_target(r.what) for r in rows(doc)[1:]] == [new_m, new_m]
@@ -183,6 +183,19 @@ def test_migrate_locators_rewrites_links_state_and_processed(org_dir):
     assert st.ledger[new_t]["locator"] == new_t and st.ledger[new_t]["key"] == f"k1|action-items.org|commitment/{new_t}"
     assert f"k1|action-items.org|commitment/{new_t}" in st.processed and f"k1|action-items.org|commitment/{old_t}" not in st.processed
     assert migrate_locators(doc, st) == 0
+
+
+def test_reformat_drops_effort_from_five_column_tables(org_dir):
+    from ledger import reformat
+    st = State.load(Paths(org_dir).state_file)
+    doc = OrgDoc(PREAMBLE + ["* Commitment", "| EFFORT | DONE | WHEN | WHO | WHAT |", "|---+---+---+---+---|",
+                             "| M | x | <2026-10-22 Wed> | @Nick | a [[file:worklog.org::*a][↗]] |",
+                             "|   |   |                  |       | tail [[file:worklog.org::*b][↗]] |", ""])
+    assert reformat(doc, st) == 2
+    r = rows(doc)
+    assert [(x.done, x.when, x.who, x.what) for x in r] == [
+        ("x", "<2026-10-22 Wed>", "@Nick", "a [[file:worklog.org::*a][↗]]"), ("", "", "", "tail [[file:worklog.org::*b][↗]]")]
+    assert doc.lines[4] == "| DONE | WHEN             | WHO   | WHAT                             |"
 
 
 def test_reformat_reorders_old_tables_and_wraps(org_dir):
@@ -197,10 +210,11 @@ def test_reformat_reorders_old_tables_and_wraps(org_dir):
     doc = OrgDoc(list(old))
     assert reformat(doc, st) == 2
     r = rows(doc)
-    assert [x.who for x in r] == ["@Nick", "@Rob"] and r[0].done == "x" and r[0].effort == "M"
+    assert [x.who for x in r] == ["@Nick", "@Rob"] and r[0].done == "x"
+    assert not any("| M |" in l or l.startswith("| M ") for l in doc.lines)  # EFFORT dropped, not carried
     assert r[0].what.startswith(" ".join(["lorem"] * 30)) and r[0].end - r[0].idx >= 2
     assert last_link_target(r[0].what) == "worklog.org::*build a proof-diff tool for CSV exports"
-    assert doc.lines[4].startswith("| EFFORT | DONE | WHEN")
+    assert split_cells(doc.lines[4]) == ["DONE", "WHEN", "WHO", "WHAT"]
     assert all(len(l) <= MAX_WIDTH for l in doc.lines if l.startswith("|"))
     again = [x.what for x in r]
     assert reformat(doc, st) == 2 and [x.what for x in rows(doc)] == again  # idempotent

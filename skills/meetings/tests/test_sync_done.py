@@ -71,7 +71,7 @@ def _entry(locator, headline, text, *, kind="headline", jira=None, category="com
 
 
 def _row(text, target, done, jira=None, category="commitment"):
-    return category, ledger.row_line("", done, "", "@Nick", ledger.what_cell(text, jira, target))
+    return category, ledger.row_line(done, "", "@Nick", ledger.what_cell(text, jira, target))
 
 
 def _age(path):
@@ -179,7 +179,7 @@ def test_unknown_word_leaves_tron(org_dir, capsys):
 
 def test_key_from_what_cell_and_from_headline(org_dir):
     loc2 = "worklog.org::*keyed - @Nick"
-    rows = [("commitment", ledger.row_line("", "x", "", "@Nick", f"Ship it DEV-9 [[file:{SHIP}][↗]]")),
+    rows = [("commitment", ledger.row_line("x", "", "@Nick", f"Ship it DEV-9 [[file:{SHIP}][↗]]")),
             _row("keyed", loc2, "x")]
     entries = [_entry(SHIP, "Ship it - @Nick", "Ship it"),
                _entry(loc2, "keyed - @Nick - " + _link("DEV-7"), "keyed")]
@@ -200,7 +200,7 @@ def test_key_from_ancestor_heading(org_dir):
 
 def test_open_question_bullet_resolved(org_dir):
     loc = MARKER + "::Open: why?"
-    rows = [("open_question", ledger.row_line("", "x", "", "", ledger.what_cell("why?", None, MARKER)))]
+    rows = [("open_question", ledger.row_line("x", "", "", ledger.what_cell("why?", None, MARKER)))]
     paths = _setup(org_dir, rows, [_entry(loc, MARKER.split("*", 1)[1], "why?", kind="bullet", category="open_question")])
     assert sync_done.main(ARGS) == 0
     wl = OrgDoc.load(paths.worklog)
@@ -210,7 +210,7 @@ def test_open_question_bullet_resolved(org_dir):
 
 def test_oq_row_with_rewritten_text_is_untracked(org_dir):
     loc = MARKER + "::Open: why?"
-    rows = [("open_question", ledger.row_line("", "x", "", "", ledger.what_cell("a completely different question", None, MARKER)))]
+    rows = [("open_question", ledger.row_line("x", "", "", ledger.what_cell("a completely different question", None, MARKER)))]
     paths = _setup(org_dir, rows, [_entry(loc, MARKER.split("*", 1)[1], "why?", kind="bullet", category="open_question")])
     assert sync_done.main(ARGS) == 2
     assert OrgDoc.load(paths.worklog).text == WORKLOG

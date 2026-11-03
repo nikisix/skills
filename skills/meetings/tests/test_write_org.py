@@ -275,7 +275,7 @@ def test_rows_land_per_category_with_links(org, tmp_path):
     heads = [l for l in led.lines if l.startswith("* ")]
     assert heads == ["* Decision", "* Commitment", "* Waiting-on", "* Follow-up", "* Open question"]
     r = by["worklog.org::*draft the CSV proofs runbook - @Nick"]
-    assert r.category == "commitment" and r.when == "<2026-10-23 Fri>" and r.who == "@Nick" and r.effort == "M"
+    assert r.category == "commitment" and r.when == "<2026-10-23 Fri>" and r.who == "@Nick"
     assert r.what == ("draft the CSV proofs runbook [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] "
                           "[[file:worklog.org::*draft the CSV proofs runbook - @Nick][↗]]")
     assert by["worklog.org::*send the sample CSV file - @Rob"].category == "waiting_on"

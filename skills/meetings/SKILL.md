@@ -67,9 +67,10 @@ prompt (`references/chat-prompt.md`) is handed the open work items from `worklog
 ## Action items ledger
 
 Every action item, follow-up, and open question in a digest carries a `category` (`decision`,
-`commitment`, `waiting_on`, `follow_up`, `open_question`) and an `effort` (`S`/`M`/`L`/null). The
+`commitment`, `waiting_on`, `follow_up`, `open_question`) and an `effort` (`S`/`M`/`L`/null, kept in
+the digest only). The
 worklog headline is tagged `:<category>:auto:` and the item is appended as a row to that category's
-table in `<org>/action-items.org` (`| EFFORT | DONE | WHEN | WHO | WHAT |`, lines at most 140 wide, a
+table in `<org>/action-items.org` (`| DONE | WHEN | WHO | WHAT |`, lines at most 140 wide, a
 long WHAT continued on rows whose other cells are blank). The row's identity is the last org link in
 WHAT (`[[file:worklog.org::*<headline prefix>][↗]]`, the headline cut at a word boundary to 56
 characters), recorded in `state.json` under `ledger`. The user ticks DONE by hand during triage; `done` (run first in `daily`) flips the worklog
