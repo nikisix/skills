@@ -111,7 +111,7 @@ def meeting_body(d: dict, people: People, now: datetime, level: int = 2) -> list
         by = f" — {org_text(people.resolve(dec.get('by')) or dec.get('by'))}" if dec.get("by") else ""
         lines.append(f"   - Decided ({dec['firmness']}): {org_text(dec['text'])}{by}")
     for q in d.get("open_questions") or []:
-        lines.append(f"   - Open: {org_text(q)}")
+        lines.append(f"   - Open: {org_text(q.get('text') if isinstance(q, dict) else q)}")
     return lines
 
 

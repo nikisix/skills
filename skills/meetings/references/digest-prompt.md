@@ -17,7 +17,22 @@ Rules:
 - `follow_ups`: proposed future meetings/syncs that involve {{ME}} (they become {{ME}}'s TODOs); a
   sync between two other people is not a follow-up. Resolve relative dates against the meeting date
   ("Friday" = next Friday on/after the meeting date; "next Wednesday" = the following week's Wednesday).
-- `open_questions`: raised and unanswered.
+- `open_questions`: raised and unanswered, as objects `{text, category, effort}`; `category` is usually
+  `open_question`, `decision` when it needs a meeting to settle.
+- Classification. Every action item, follow-up, and open question carries a `category`, one of:
+  `decision` (an unresolved item that needs more discussion or a meeting before it can move: a choice
+  between options, an escalation, "let's meet on this"; a follow-up whose purpose is to decide something
+  is `decision`, not `follow_up`), `commitment` (what {{ME}} committed to, {{ME}}'s new TODOs),
+  `waiting_on` (what {{ME}} is waiting on from someone else), `follow_up` (a concrete later task or
+  sync with no decision pending), `open_question` (left unresolved, including a disagreement left
+  standing). Default for an action item by owner: {{ME}} owns it -> `commitment`, someone else owes it
+  -> `waiting_on`; override only when the text clearly says otherwise.
+- `effort`: {{ME}}'s own effort to clear the item: `S` under an hour, `M` a half day to a day, `L` more.
+  `null` for items others own unless the text implies {{ME}}'s share.
+- Tickets in play (key · task / sub-task):
+{{TICKETS}}
+  Set `jira` to one of these keys only when the item is clearly work on that ticket, keep a key that was
+  written or said, otherwise `null`. Never invent a key.
 - `source_quality`: `verbatim` for a real transcript, `captions` for live captions, `notes` for notes.
 - Use the metadata header for `title`, `date`, `source`, and `attendees` unless the transcript clearly
   contradicts it. Header attendees may be full names ("Abhi Gurudwar"): map each to its roster name

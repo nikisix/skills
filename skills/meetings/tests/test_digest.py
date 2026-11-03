@@ -120,7 +120,8 @@ def test_schema_rejects_newlines_in_text():
 def test_digest_date_source_from_header(org_dir, tmp_path, monkeypatch):
     good = json.loads((FIX / "digest-good.json").read_text())
     good["date"], good["source"] = "2026-10-19", "manual"  # model drifted from the header
-    good["follow_ups"].append({"text": "earlier than the meeting", "with": ["Rob"], "when": "2025-01-01"})
+    good["follow_ups"].append({"text": "earlier than the meeting", "with": ["Rob"], "when": "2025-01-01",
+                               "category": "follow_up", "effort": None})
     monkeypatch.setattr(digest, "run_claude", lambda prompt, timeout=300: json.dumps(good))
     out = tmp_path / "d.json"
     assert digest.main([str(_normalized(tmp_path)), "-o", str(out)]) == 0
@@ -170,3 +171,60 @@ def test_open_items_include_landed_auto_todos(org_dir):
     assert "Send Rob the DMP access creds" in items and "Draft the proofs runbook" in items
     assert "Follow up" in items and "Align on Jira buckets" in items
     assert "old thing" not in items
+
+
+def _people(org_dir):
+    return People.load(org_dir / "meetings" / "people.yaml")
+
+
+def test_schema_requires_category_and_effort():
+    d = json.loads((FIX / "digest-good.json").read_text())
+    assert digest.validate(d) == []
+    del d["action_items"][0]["category"]
+    assert any("category" in e for e in digest.validate(d))
+    d = json.loads((FIX / "digest-good.json").read_text())
+    d["open_questions"] = ["legacy string"]
+    assert digest.validate(d)  # strings are no longer valid
+
+
+def test_normalize_fills_legacy_digest(org_dir):
+    d = {"action_items": [{"text": "a", "owner": "Nick", "due": None, "jira": None, "ticket_worthy": False},
+                          {"text": "b", "owner": "Rob", "due": None, "jira": None, "ticket_worthy": False}],
+         "follow_ups": [{"text": "c", "with": ["Rob"], "when": None}],
+         "open_questions": ["why?"]}
+    digest.normalize_digest(d, _people(org_dir))
+    assert d["action_items"][0]["category"] == "commitment" and d["action_items"][0]["effort"] is None
+    assert d["action_items"][1]["category"] == "waiting_on"
+    assert d["follow_ups"][0]["category"] == "follow_up"
+    assert d["open_questions"][0] == {"text": "why?", "category": "open_question", "effort": None}
+
+
+def test_normalize_keeps_existing_fields(org_dir):
+    d = {"action_items": [{"text": "a", "owner": "Nick", "due": None, "jira": None, "ticket_worthy": False,
+                           "category": "decision", "effort": "L"}], "follow_ups": [], "open_questions": []}
+    digest.normalize_digest(d, _people(org_dir))
+    assert d["action_items"][0]["category"] == "decision" and d["action_items"][0]["effort"] == "L"
+
+
+def test_ticket_candidates_from_in_progress_and_today(org_dir):
+    import shutil
+    from datetime import date
+
+    from config import Paths
+
+    shutil.copy(FIX / "tron-tasks-sample.org", org_dir / "tron-tasks.org")
+    shutil.copy(FIX / "worklog-sample.org", org_dir / "worklog.org")
+    lines = digest.ticket_candidates(Paths(org_dir), date(2026, 10, 21))
+    assert "DEV-10716 · Trontology upgrade: synonyms, transforms" in lines
+    assert "DEV-10718 · Trontology upgrade: synonyms, transforms / sync the synonyms table" in lines
+    assert "DEV-10900 · Build a proof-diff tool for CSV exports" in lines
+    assert "DEV-10173 · CSV Proofs" in lines
+    assert not any("DEV-1 " in l or l.startswith("DEV-1 ") for l in lines)  # Done section excluded
+    assert digest.ticket_candidates(Paths(org_dir / "nowhere"), date(2026, 10, 21)) == []
+
+
+def test_prompt_carries_tickets_and_rules(org_dir):
+    p = digest.build_prompt("title: x\ndate: 2026-10-22\nkind: meeting\n", "body", _people(org_dir), tickets=["DEV-1 · A"])
+    assert "DEV-1 · A" in p and "waiting_on" in p and "`effort`" in p and "{{" not in p
+    c = digest.build_prompt("title: x\ndate: 2026-10-22\nkind: chat\n", "body", _people(org_dir))
+    assert "(none)" in c and "waiting_on" in c and "{{" not in c

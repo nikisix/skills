@@ -88,7 +88,9 @@
           "owner",
           "due",
           "jira",
-          "ticket_worthy"
+          "ticket_worthy",
+          "category",
+          "effort"
         ],
         "properties": {
           "text": {
@@ -118,6 +120,23 @@
           },
           "ticket_worthy": {
             "type": "boolean"
+          },
+          "category": {
+            "enum": [
+              "decision",
+              "commitment",
+              "waiting_on",
+              "follow_up",
+              "open_question"
+            ]
+          },
+          "effort": {
+            "enum": [
+              "S",
+              "M",
+              "L",
+              null
+            ]
           }
         }
       }
@@ -130,7 +149,9 @@
         "required": [
           "text",
           "with",
-          "when"
+          "when",
+          "category",
+          "effort"
         ],
         "properties": {
           "text": {
@@ -150,6 +171,23 @@
               "null"
             ],
             "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "category": {
+            "enum": [
+              "decision",
+              "commitment",
+              "waiting_on",
+              "follow_up",
+              "open_question"
+            ]
+          },
+          "effort": {
+            "enum": [
+              "S",
+              "M",
+              "L",
+              null
+            ]
           }
         }
       }
@@ -157,8 +195,37 @@
     "open_questions": {
       "type": "array",
       "items": {
-        "type": "string",
-        "pattern": "^[^\\n]*$"
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "category",
+          "effort"
+        ],
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\n]*$"
+          },
+          "category": {
+            "enum": [
+              "decision",
+              "commitment",
+              "waiting_on",
+              "follow_up",
+              "open_question"
+            ]
+          },
+          "effort": {
+            "enum": [
+              "S",
+              "M",
+              "L",
+              null
+            ]
+          }
+        }
       }
     },
     "source_quality": {
