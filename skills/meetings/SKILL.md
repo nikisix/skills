@@ -1,6 +1,6 @@
 ---
 name: meetings
-description: Turn meeting transcripts (Teams via m365, or hand-pasted Slack/Teams text) into org-mode worklog blocks, dated follow-ups, and Jira ticket suggestions; weekly arXiv scan against open work items. Triggers on /meetings, "digest this meeting", "meeting transcript", "arxiv scan for my work items".
+description: Turn meeting transcripts (Teams via m365, or hand-pasted Slack/Teams text) into org-mode worklog blocks, dated follow-ups, Jira ticket suggestions, and rows in the action-items.org ledger; done-sync propagates ticked rows back to the worklog and tron-tasks; weekly arXiv scan against open work items. Triggers on /meetings, "digest this meeting", "meeting transcript", "action items", "ledger", "arxiv scan for my work items".
 ---
 
 # meetings
@@ -8,8 +8,10 @@ description: Turn meeting transcripts (Teams via m365, or hand-pasted Slack/Team
 Two-stage pipeline. **Stage 1** (LLM): a transcript becomes a JSON digest that must validate against
 `references/digest-schema.json` (contract: `references/minutes-contract.md`). **Stage 2**
 (deterministic Python): the digest is rendered into org text and added — never edited — into the
-org files with greppable `:auto:` markers. Runbook with policies and rollback lives in the org repo:
-`~/org/ringmaster/CLAUDE-meetings.md`.
+org files with greppable `:auto:` markers, and every item also lands as a row in `action-items.org`.
+The one deliberate exception to "never edited" is done-sync (`sync_done.py`): a DONE cell the user
+fills in the ledger flips the worklog item to `DONE` and moves the tron task. Runbook with policies
+and rollback lives in the org repo: `~/org/ringmaster/CLAUDE-meetings.md`.
 
 Skill source: `~/code/skills/skills/meetings` (symlinked into `~/.claude/skills/meetings`). All
 commands run through `uv`:
@@ -30,7 +32,10 @@ RUN="uv run --project $SKILL python $SKILL/scripts"
 | `fetch` | pull new Teams transcripts for my own meetings into the inbox | `$RUN/fetch_teams.py [--dry-run]` |
 | `slack` | pull yesterday's DMs / group DMs / listed channels into the inbox as `kind: chat` files | `$RUN/fetch_slack.py [--dry-run] [--today YYYY-MM-DD]` |
 | `arxiv` | weekly research scan against open work items | `$RUN/arxiv_scan.py [--dry-run]` |
-| `status` | what is in inbox / digests / state | `bash $SKILL/scripts/run.sh status` |
+| `status` | what is in inbox / digests / state, plus ledger counts | `bash $SKILL/scripts/run.sh status` |
+| `done` | propagate checked DONE cells in `action-items.org` to the worklog item and the tron task | `bash $SKILL/scripts/run.sh done [--dry-run]` |
+| `ledger` | counts per category: open / done / untracked rows | `bash $SKILL/scripts/run.sh ledger` |
+| `ledger-backfill` | one-time: classify digests on disk, row every landed item | `bash $SKILL/scripts/run.sh ledger-backfill [--since YYYY-MM-DD] [--dry-run]` |
 
 Always prefer `--dry-run` first when the user is present; the scheduled job runs without it.
 
@@ -58,6 +63,18 @@ prompt (`references/chat-prompt.md`) is handed the open work items from `worklog
 `tron-tasks.org` and returns only *new* action items, which land as `**** TODO` lines under a
 `*** Slack #<channel> :chat:auto:` block inside the day's single `** Slack :chat:auto:` group. Token: `$SLACK_USER_TOKEN` or the keychain item
 `meetings-slack`. `run.sh daily` runs it after the Teams fetch; it is skipped when `slack.yaml` is absent.
+
+## Action items ledger
+
+Every action item, follow-up, and open question in a digest carries a `category` (`decision`,
+`commitment`, `waiting_on`, `follow_up`, `open_question`) and an `effort` (`S`/`M`/`L`/null). The
+worklog headline is tagged `:<category>:auto:` and the item is appended as a row to that category's
+table in `<org>/action-items.org` (`| WHEN | WHO | WHAT | EFFORT | DONE |`). The row's identity is the
+last org link in WHAT (`[[file:worklog.org::*<text> - @Owner][↗]]`), recorded in `state.json` under
+`ledger`. The user ticks DONE by hand during triage; `done` (run first in `daily`) flips the worklog
+item and moves the tron task to the bucket the DONE word names (`x` = In Review; see the runbook
+table). `ledger-backfill` classifies digests written before `category` existed
+(`references/classify-prompt.md`) and rows the items that were landed; run it once.
 
 ## Exit codes (writers)
 

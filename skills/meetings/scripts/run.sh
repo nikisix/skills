@@ -1,12 +1,15 @@
 #!/bin/bash
 # Orchestrator for the meetings pipeline. Invoked by launchd (absolute paths, no shell profile).
 #
-#   run.sh daily              fetch Teams transcripts + Slack days, then digest + land every file in inbox/
+#   run.sh daily              done-sync, fetch Teams transcripts + Slack days, then digest + land every file in inbox/
 #   run.sh arxiv              weekly arXiv scan against open work items
 #   run.sh digest-one <file>  normalize -> digest -> write_org -> suggest -> archive, for one file
-#   run.sh status             what is pending, last runs, tail of today's log
+#   run.sh done [--dry-run]   propagate checked DONE cells in action-items.org to worklog + tron-tasks
+#   run.sh ledger             action-items.org counts per category (open / done / untracked)
+#   run.sh ledger-backfill [--since D] [--dry-run]   one-time: classify digests on disk, row every landed item
+#   run.sh status             what is pending, last runs, ledger counts, tail of today's log
 #
-# Exit: 0 ok · 2 nothing to do · 3 a write was skipped (worklog saved < 15 min ago; retried hourly)
+# Exit: 0 ok · 2 nothing to do · 3 a write was skipped (a file saved < 15 min ago; retried hourly)
 set -u
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 UV="${UV:-/opt/homebrew/bin/uv}"
@@ -55,6 +58,14 @@ cmd_daily() {
   if ! mkdir "$LOCK" 2>/dev/null; then log "another run holds $LOCK; exiting"; exit 0; fi
   trap 'rmdir "$LOCK"' EXIT
   log "daily run start"
+  local any=0 skipped=0 f
+  py sync_done.py >>"$LOG" 2>&1; rc=$?
+  case $rc in
+    0) log "done-sync: applied edits (see log for the undo list)";;
+    2) log "done-sync: nothing to do";;
+    3) log "done-sync: skipped (a file saved < 15 min ago); will retry"; skipped=1;;
+    *) log "done-sync: error $rc, continuing";;
+  esac
   if command -v m365 >/dev/null 2>&1; then
     py fetch_teams.py >>"$LOG" 2>&1; rc=$?
     case $rc in 0) log "teams: fetched new transcripts";; 2) log "teams: nothing new";; *) log "teams: fetch failed ($rc), continuing (run 'm365 status')";; esac
@@ -67,7 +78,6 @@ cmd_daily() {
   else
     log "slack: no meetings/slack.yaml, skipping"
   fi
-  local any=0 skipped=0 f
   shopt -s nullglob
   for f in "$MEET"/inbox/*.txt "$MEET"/inbox/*.vtt "$MEET"/inbox/*.docx; do
     any=1
@@ -96,6 +106,7 @@ cmd_status() {
     python3 -c "import json,sys; s=json.load(open(sys.argv[1])); print('last poll: ', s.get('last_teams_poll')); print('last arxiv:', s.get('last_arxiv_run')); print('writes:    ', len(s.get('processed',{})))" "$MEET/state.json"
   fi
   echo "auto lines:$(grep -c ':auto:' "$ORG_DIR/worklog.org" 2>/dev/null || echo 0) in worklog.org"
+  [ -f "$ORG_DIR/action-items.org" ] && { echo "ledger:"; py ledger.py 2>/dev/null | sed 's/^/           /'; }
   [ -f "$LOG" ] && { echo "--- $LOG"; tail -n 15 "$LOG"; }
 }
 
@@ -103,6 +114,9 @@ case "${1:-}" in
   daily) cmd_daily;;
   arxiv) shift; cmd_arxiv "$@";;
   digest-one) [ -n "${2:-}" ] || { echo "usage: run.sh digest-one <file>" >&2; exit 1; }; digest_one "$2"; exit $?;;
+  done) shift; py sync_done.py "$@"; exit $?;;
+  ledger) py ledger.py; exit $?;;
+  ledger-backfill) shift; py backfill_ledger.py "$@"; exit $?;;
   status) cmd_status;;
-  *) sed -n '2,10p' "$0"; exit 1;;
+  *) sed -n '2,13p' "$0"; exit 1;;
 esac

@@ -65,3 +65,57 @@ def test_chat_file_lands_as_chat_block(org):
     text = (org_dir / "worklog.org").read_text()
     assert "** Slack :chat:auto:\n*** Rob 1:1 :chat:auto:" in text  # fake claude keeps the fixture title; kind from the header
     assert text.count(":chat:auto:") == 2  # the day's group + the one conversation
+
+
+# --- orchestration with a stub `uv` that records which script ran -------------------------
+
+STUB_UV = '''#!/bin/bash
+# run.sh calls: uv run --project DIR --quiet python DIR/scripts/<script> [args]; records "<script> args"
+shift 5
+script="$(basename "$1")"; shift
+echo "$script $*" >> "$STUB_CALLS"
+var="STUB_EXIT_${script%.py}"
+exit "${!var:-2}"
+'''
+
+
+@pytest.fixture
+def stub_env(org_dir, tmp_path):
+    uv = tmp_path / "uv"
+    uv.write_text(STUB_UV)
+    uv.chmod(0o755)
+    calls = tmp_path / "calls.txt"
+    (org_dir / "meetings" / "slack.yaml").write_text("channels: []\n")
+    return org_dir, uv, calls
+
+
+def run_stub(stub_env, *args, **exits):
+    org_dir, uv, calls = stub_env
+    env = {**os.environ, "MEETINGS_ORG_DIR": str(org_dir), "UV": str(uv), "STUB_CALLS": str(calls)}
+    env.update({f"STUB_EXIT_{k}": str(v) for k, v in exits.items()})
+    r = subprocess.run(["bash", str(SKILL / "scripts" / "run.sh"), *args], env=env, capture_output=True, text=True)
+    lines = calls.read_text().splitlines() if calls.exists() else []
+    calls.unlink(missing_ok=True)
+    return r, lines
+
+
+def test_daily_runs_done_sync_before_fetch(stub_env):
+    r, calls = run_stub(stub_env, "daily")
+    names = [c.split()[0] for c in calls]
+    assert names[0] == "sync_done.py" and "fetch_slack.py" in names[1:]
+    assert r.returncode == 2  # inbox empty
+
+
+def test_daily_exit_3_when_done_sync_guard_trips(stub_env):
+    r, calls = run_stub(stub_env, "daily", sync_done=3)
+    assert r.returncode == 3
+    assert [c.split()[0] for c in calls][0] == "sync_done.py" and "fetch_slack.py" in [c.split()[0] for c in calls]
+
+
+def test_done_and_backfill_commands_dispatch(stub_env):
+    r, calls = run_stub(stub_env, "done", "--dry-run", sync_done=0)
+    assert calls == ["sync_done.py --dry-run"] and r.returncode == 0
+    r, calls = run_stub(stub_env, "ledger-backfill", "--since", "2026-10-01", backfill_ledger=0)
+    assert calls == ["backfill_ledger.py --since 2026-10-01"] and r.returncode == 0
+    r, calls = run_stub(stub_env, "ledger", ledger=0)
+    assert calls == ["ledger.py "] and r.returncode == 0

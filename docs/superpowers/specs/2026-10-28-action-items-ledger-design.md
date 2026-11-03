@@ -141,9 +141,12 @@ normalizer exists for the digests already on disk.
   }
   ```
 
-  `<locator>` is the link target exactly as written in the cell (`worklog.org::*<headline>` or
-  `worklog.org::Open: <text>`). The headline string is the full headline text without stars and
-  keyword, including the owner suffix and tags, which is what org's `::*` search matches on.
+  `<locator>` is the link target exactly as written in the cell (`worklog.org::*<headline>` or, for an
+  open question, the state identity `<marker locator>::Open: <text>`). The headline string in the
+  locator is the headline text without stars, keyword, and tags, and for a keyed item also without
+  its Jira link (`<text> - @Owner`): a link inside a link target nests brackets and breaks the row's
+  own link, and nvim-orgmode's `::*` prefix match resolves the shorter form. The entry's `headline`
+  keeps the full text (with the Jira link) for exact matching by done-sync and backfill.
 - The ledger file is subject to the same mtime guard as the worklog (exit 3 when Nick saved it in the
   last 15 minutes and the save was not ours). `apply()` already handles several files per run.
 - Key inheritance: an item with `jira: null` that lands under a hand-written heading carrying a `DEV-`
