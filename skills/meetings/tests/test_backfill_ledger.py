@@ -215,3 +215,16 @@ def test_main_guard_trips_on_hand_saved_ledger(org_dir, monkeypatch):
     assert bl.main(["--now", NOW.isoformat()]) == 3
     assert State.load(paths.state_file).ledger == {}
     assert paths.ledger.read_text() == "\n".join(ledger.PREAMBLE) + "\n"
+
+
+def test_backfill_locates_headline_as_landed_when_classifier_links_key(org_dir):
+    """The classifier may add a key after landing; the worklog headline still has none."""
+    paths, _ = _setup(org_dir)
+    answer = json.loads(json.dumps(CLASSIFIED))
+    answer["action_items"][2]["jira"] = "DEV-10900"  # in the tron fixture's In Progress
+    n = bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=lambda p: json.dumps(answer), now=NOW)
+    assert n == 6
+    e = State.load(paths.state_file).ledger["worklog.org::*build a proof-diff tool for CSV exports - @Nick"]
+    assert e["jira"] == "DEV-10900" and e["headline"] == "build a proof-diff tool for CSV exports - @Nick"
+    rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
+    assert "[[https://rmt.atlassian.net/browse/DEV-10900][DEV-10900]] [[file:" in rows["worklog.org::*build a proof-diff tool for CSV exports - @Nick"].cells[2]

@@ -162,8 +162,11 @@ def _marker(doc: OrgDoc, start: int, end: int, d: dict) -> int | None:
     return first
 
 
-def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now: datetime, log) -> list:
-    """Ledger writes for a landed digest: every item still present in its file gets a row."""
+def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now: datetime, log,
+              landed_jira: list[str | None] | None = None) -> list:
+    """Ledger writes for a landed digest: every item still present in its file gets a row. `landed_jira`
+    is each action item's key at landing time (the classifier may have linked one since); the worklog
+    headline is located and recorded in that form."""
     p = _Planner(key, paths, frozenset(state.processed))
     landed_file = paths.org_dir / d["landed"]["file"]
     link_file = d["landed"]["file"]
@@ -175,16 +178,18 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
     start, end = bounds
     day = d["date"]
 
-    def entry(locator, kind, file_rel, day_s, headline, text, jira, category, done_at):
+    def entry(locator, kind, file_rel, day_s, headline, text, jira, category, done_at, jira_source="digest"):
         return {"locator": locator, "key": f"{key}|{paths.ledger.name}|{category}/{locator}", "file": file_rel, "day": day_s,
                 "kind": kind, "headline": headline, "text": text, "jira": jira,
-                "jira_source": "digest" if jira else None, "category": category, "done_at": done_at}
+                "jira_source": jira_source if jira else None, "category": category, "done_at": done_at}
 
     def done_of(hdoc: OrgDoc, idx: int) -> tuple[str, str | None]:
         return ("x", now.isoformat(timespec="minutes")) if headline_parts(hdoc.lines[idx])[1] == "DONE" else ("", None)
 
-    for it in d.get("action_items") or []:
-        headline = item_headline(it, people)
+    items = d.get("action_items") or []
+    landed_jira = landed_jira if landed_jira is not None else [it.get("jira") for it in items]
+    for it, was in zip(items, landed_jira):
+        headline = item_headline({**it, "jira": was}, people)
         target = link_target(link_file, _locator_title(it, people))
         if target in state.ledger:
             continue
@@ -197,7 +202,8 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
         who = f"@{people.resolve(it.get('owner')) or it.get('owner') or '?'}"
         when = org_date(date.fromisoformat(it["due"])) if it.get("due") else ""
         p.ledger_row(cat, when, who, it["text"], it.get("jira"), it.get("effort") or "", target,
-                     entry(target, "headline", link_file, day, headline, it["text"], it.get("jira"), cat, done_at), done)
+                     entry(target, "headline", link_file, day, headline, it["text"], it.get("jira"), cat, done_at,
+                           "digest" if it.get("jira") == was else "classify"), done)
     for i, fu in enumerate(d.get("follow_ups") or []):
         headline = followup_headline(fu, people)
         cat = fu.get("category") or "follow_up"
@@ -272,11 +278,12 @@ def backfill(paths: Paths, state: State, people: People, since: date | None, dry
         key = landed_key(d, state)
         if key is None:
             continue
+        landed_jira = [it.get("jira") for it in d.get("action_items") or []]
         if needs_classification(d):
             classify(d, ticket_candidates(paths, date.fromisoformat(d["date"])), run=run, people=people)
             if not dry_run:
                 dj.write_text(json.dumps(d, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        writes = plan_rows(d, key, paths, people, state, now, print)
+        writes = plan_rows(d, key, paths, people, state, now, print, landed_jira)
         rows = [w for w in writes if w.ledger_entry]
         if not rows:
             continue
