@@ -5,7 +5,7 @@
 #   run.sh arxiv              weekly arXiv scan against open work items
 #   run.sh digest-one <file>  normalize -> digest -> write_org -> suggest -> archive, for one file
 #   run.sh done [--dry-run]   propagate checked DONE cells in action-items.org to worklog + tron-tasks
-#   run.sh ledger             action-items.org counts per category (open / done / untracked)
+#   run.sh ledger [--reformat]   action-items.org counts per category (open / done / untracked); --reformat re-wraps the tables
 #   run.sh ledger-backfill [--since D] [--dry-run]   one-time: classify digests on disk, row every landed item
 #   run.sh status             what is pending, last runs, ledger counts, tail of today's log
 #
@@ -115,7 +115,7 @@ case "${1:-}" in
   arxiv) shift; cmd_arxiv "$@";;
   digest-one) [ -n "${2:-}" ] || { echo "usage: run.sh digest-one <file>" >&2; exit 1; }; digest_one "$2"; exit $?;;
   done) shift; py sync_done.py "$@" 2>&1 | tee -a "$LOG"; exit "${PIPESTATUS[0]}";;   # the log is the undo list
-  ledger) py ledger.py; exit $?;;
+  ledger) shift; py ledger.py "$@"; exit $?;;
   ledger-backfill) shift; py backfill_ledger.py "$@" 2>&1 | tee -a "$LOG"; exit "${PIPESTATUS[0]}";;
   status) cmd_status;;
   *) sed -n '2,13p' "$0"; exit 1;;

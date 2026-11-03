@@ -120,6 +120,8 @@ def test_done_and_backfill_commands_dispatch(stub_env):
     assert calls == ["backfill_ledger.py --since 2026-10-01"] and r.returncode == 0
     r, calls = run_stub(stub_env, "ledger", ledger=0)
     assert calls == ["ledger.py "] and r.returncode == 0
+    r, calls = run_stub(stub_env, "ledger", "--reformat", ledger=0)
+    assert calls == ["ledger.py --reformat"] and r.returncode == 0
 
 
 def test_done_and_backfill_append_to_the_day_log(stub_env):

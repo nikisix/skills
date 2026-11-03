@@ -19,7 +19,7 @@ from pathlib import Path
 
 from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from digest import CATEGORIES, EFFORTS, SKILL_DIR, extract_json, run_claude, ticket_candidates, validate
-from ledger import link_target
+from ledger import link_targets_in_use, own_entry, short_target
 from orgfile import OrgDoc, headline_parts, plain_title
 from people import People
 from render import followup_headline, item_headline, org_date
@@ -177,6 +177,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
         return []
     start, end = bounds
     day = d["date"]
+    taken = link_targets_in_use(state.ledger, exclude_key=key)
 
     def entry(locator, kind, file_rel, day_s, headline, text, jira, category, done_at, jira_source="digest"):
         return {"locator": locator, "key": f"{key}|{paths.ledger.name}|{category}/{locator}", "file": file_rel, "day": day_s,
@@ -186,9 +187,11 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
     def done_of(hdoc: OrgDoc, idx: int) -> tuple[str, str | None]:
         return ("x", now.isoformat(timespec="minutes")) if headline_parts(hdoc.lines[idx])[1] == "DONE" else ("", None)
 
-    def rowed(locator: str, headline: str) -> bool:
-        """True when the locator already has an entry. Our own entry (a rerun) is silent; another
+    def rowed(locator: str, headline: str, file_rel: str = link_file, text: str | None = None) -> bool:
+        """True when the item already has an entry. Our own entry (a rerun) is silent; another
         digest's means a same-text item the backfill cannot suffix, so it says so."""
+        if own_entry(state.ledger, key, file_rel, headline, text) is not None:
+            return True
         prior = state.ledger.get(locator)
         if prior is None:
             return False
@@ -201,9 +204,10 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
     landed_jira = landed_jira if landed_jira is not None else [it.get("jira") for it in items]
     for it, was in zip(items, landed_jira):
         headline = item_headline({**it, "jira": was}, people)
-        target = link_target(link_file, _locator_title(it, people))
+        target = short_target(link_file, _locator_title(it, people), taken)
         if rowed(target, headline):
             continue
+        taken.add(target)
         h = doc.find_headline(headline, start, end)
         if h is None:
             log(f"backfill: {key}: '{headline}' not found in {link_file}, skipped")
@@ -230,7 +234,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
                 continue
             fday = fdoc.find_day(when)
             h = fdoc.find_headline(headline, fday, fdoc.section_end(fday))
-            target = link_target(frel, headline)
+            target = short_target(frel, headline, taken)
             day_s, when_s, hdoc = when.isoformat(), org_date(when), fdoc
             if h is None and (h := fdoc.find_headline(headline)) is not None:
                 under = _day_of(fdoc, h)  # rescheduled by hand: the row follows the item
@@ -239,10 +243,11 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
                     log(f"backfill: {key}: '{headline}' found under {under.isoformat()} (moved by hand)")
         else:
             h = doc.find_headline(headline, start, end)
-            target = link_target(link_file, headline)
+            target = short_target(link_file, headline, taken)
             day_s, when_s, hdoc, frel = day, "", doc, link_file
-        if rowed(target, headline):
+        if rowed(target, headline, frel):
             continue
+        taken.add(target)
         if h is None:
             log(f"backfill: {key}: '{headline}' not found in {frel}, skipped")
             continue
@@ -257,11 +262,11 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             # the block heading is the nearest headline the row can link
             m = start
         marker_headline = headline_parts(doc.lines[m])[2]
-        marker_target = link_target(link_file, marker_headline)
+        marker_target = short_target(link_file, marker_headline, taken)
         for q in qs:
             text = q.get("text") if isinstance(q, dict) else str(q)
             locator = f"{marker_target}::Open: {text}"
-            if rowed(locator, f"Open: {text}"):
+            if rowed(locator, marker_headline, link_file, text):
                 continue
             if not any(doc.lines[j].strip() == f"- Open: {text}" for j in range(m, doc.section_end(m))):
                 log(f"backfill: {key}: open question '{text}' not found under the marker, skipped")

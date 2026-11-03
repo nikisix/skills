@@ -34,7 +34,8 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 |---|---|---|
 | EFFORT scale | `S` / `M` / `L`, estimated by the model, blank when it cannot say | Three buckets is what a glance can use; hours would be false precision from a transcript |
 | Row locator | The WHAT cell ends with an org link to the worklog item; that link target is the row's identity in `state.json`. No ID column | Keeps Nick's five columns; the link doubles as "jump to source" |
-| Link target form | Headline **without keyword and tags**: `worklog.org::*<text> - @Owner`. nvim-orgmode resolves `::*` by a lowercased prefix match on the title with the tag node stripped, so a target carrying `:commitment:auto:` never matches | Same string is the state identity and what done-sync and backfill match on |
+| Link target form | The headline **without keyword and tags**, cut at a word boundary so the whole target stays within 56 characters: `worklog.org::*<headline prefix>`. nvim-orgmode resolves `::*` by a lowercased prefix match on the title with the tag node stripped, so a target carrying `:commitment:auto:` never matches and a shortened one still does. A prefix another row already uses is extended word by word (`short_target`); a dangling `-` or `·` is dropped | Same string is the state identity and what done-sync and backfill match on; a full headline (median 118 characters) cannot fit a 140-wide table |
+| Table width and column order | `\| EFFORT \| DONE \| WHEN \| WHO \| WHAT \|`, lines at most 140 characters. WHAT wraps at word boundaries (links never split) onto continuation rows whose four fixed cells are blank; the last chunk ends with the ↗ link, which distinguishes a continuation row from an open-question row. `ledger.py --reformat` rebuilds every table to this layout (and migrates full-headline targets plus their state keys); a plain append wraps to the width the table currently leaves | The narrow fixed columns first keep the triage cells visible; one hard width keeps the file readable in a terminal |
 | Open questions in worklog | Stay as `- Open:` bullets under the marker; done = bullet becomes `- Resolved [date]:` | They never were headlines; turning them into headlines would change the worklog shape already approved |
 | Locator uniqueness | A locator already present in `state.ledger` (any day, any file) gets ` (2)`, ` (3)` appended to the worklog headline at landing | Two Slack days can yield identical items; done-sync's file-wide search needs unique targets |
 | Jira sync direction | Documented in the runbook: jira-sync's default pass is Jira -> org and would revert a done-sync bucket move; the move reaches Jira only when Nick runs the org -> Jira direction | Not this project's code, but the user must know which run to do next |
@@ -58,13 +59,14 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 #+STARTUP: showall
 
 * Decision
-| WHEN             | WHO    | WHAT                                                    | EFFORT | DONE |
-|------------------+--------+---------------------------------------------------------+--------+------|
-| <2026-10-28 Wed> | @Mitch | Statutory classification and state scoping [[file:worklog.org::*Quick call to resolve how statutory classification and state scoping will work for Statutory Disability / PFML. - @Nick][↗]] | M |  |
+| EFFORT | DONE | WHEN             | WHO    | WHAT                                                                                 |
+|--------+------+------------------+--------+--------------------------------------------------------------------------------------|
+| M      |      | <2026-10-28 Wed> | @Mitch | Quick call to resolve how statutory classification and state scoping will work for   |
+|        |      |                  |        | Statutory Disability / PFML. [[file:worklog.org::*Quick call to resolve how statutory][↗]] |
 
 * Commitment
-| WHEN | WHO | WHAT | EFFORT | DONE |
-|------+-----+------+--------+------|
+| EFFORT | DONE | WHEN | WHO | WHAT |
+|--------+------+------+-----+------|
 
 * Waiting-on
 ...
@@ -83,11 +85,15 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 - Cells: **WHEN** org date `<YYYY-MM-DD Day>` from `due` / `when`, blank if none. **WHO** `@Name` from
   the roster (owner for action items, the `with` list for follow-ups, `@?` when unknown; for
   Waiting-on this is the person owing the item). **WHAT** the item text, then one space, then the
-  locator link `[[file:worklog.org::*<headline>][↗]]` (or `[[file:2026/2026-09-worklog.org::*…][↗]]`
-  for a past month; for an open question `[[file:worklog.org::Open: <text>][↗]]`, an org text-search
-  link). **EFFORT** `S` / `M` / `L` or blank. **DONE** blank.
+  locator link `[[file:worklog.org::*<headline prefix>][↗]]` (or `[[file:2026/2026-09-worklog.org::*…][↗]]`
+  for a past month; for an open question the block marker's target). **EFFORT** `S` / `M` / `L` or
+  blank. **DONE** blank. Columns are written in the order EFFORT, DONE, WHEN, WHO, WHAT.
+- Wrapping: WHAT is cut at word boundaries into chunks that keep the line within 140 characters given
+  the table's current fixed-column widths; chunks after the first go on continuation rows with blank
+  EFFORT/DONE/WHEN/WHO. Links are never split.
 - Realignment: after appending, the writer pads every cell of that table to the column's widest cell.
-  No other change to existing rows is ever made.
+  No other change to existing rows is ever made. `ledger.py --reformat` is the one deliberate rewrite:
+  it rebuilds every table (same cells, new line breaks and padding) and is idempotent.
 
 ## Classification
 
@@ -141,12 +147,17 @@ normalizer exists for the digests already on disk.
   }
   ```
 
-  `<locator>` is the link target exactly as written in the cell (`worklog.org::*<headline>` or, for an
-  open question, the state identity `<marker locator>::Open: <text>`). The headline string in the
-  locator is the headline text without stars, keyword, and tags, and for a keyed item also without
-  its Jira link (`<text> - @Owner`): a link inside a link target nests brackets and breaks the row's
-  own link, and nvim-orgmode's `::*` prefix match resolves the shorter form. The entry's `headline`
-  keeps the full text (with the Jira link) for exact matching by done-sync and backfill.
+  `<locator>` is the link target exactly as written in the cell (`worklog.org::*<headline prefix>` or,
+  for an open question, the state identity `<marker locator>::Open: <text>`). The headline string in
+  the locator is the headline text without stars, keyword, and tags, for a keyed item also without
+  its Jira link (`<text> - @Owner`), then cut at a word boundary to keep the target within 56
+  characters (`LOCATOR_MAX`): a link inside a link target nests brackets and breaks the row's own
+  link, and nvim-orgmode's `::*` prefix match resolves the shorter form. The entry's `headline`
+  keeps the full text (with the Jira link) for exact matching by done-sync and backfill, and a rerun
+  of the same digest reuses the locator its entry already holds (`own_entry`) rather than recomputing
+  one. Targets written before the cut existed are migrated by `ledger.py --reformat`
+  (`migrate_locators`: the link in the cell, the `ledger` key, the entry's `locator` and `key`, and the
+  `processed` key all move together; the state is saved without the disk merge so the old keys go).
 - The ledger file is subject to the same mtime guard as the worklog (exit 3 when Nick saved it in the
   last 15 minutes and the save was not ours). `apply()` already handles several files per run.
 - Key inheritance: an item with `jira: null` that lands under a hand-written heading carrying a `DEV-`

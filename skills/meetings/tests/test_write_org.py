@@ -265,7 +265,7 @@ def _cli(org, tmp_path, digest, key="k1"):
 
 def _rows_by_target(org):
     led = OrgDoc.load(org / "action-items.org")
-    return led, {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(led)}
+    return led, {ledger.last_link_target(r.what): r for r in ledger.rows(led)}
 
 
 def test_rows_land_per_category_with_links(org, tmp_path):
@@ -275,15 +275,15 @@ def test_rows_land_per_category_with_links(org, tmp_path):
     heads = [l for l in led.lines if l.startswith("* ")]
     assert heads == ["* Decision", "* Commitment", "* Waiting-on", "* Follow-up", "* Open question"]
     r = by["worklog.org::*draft the CSV proofs runbook - @Nick"]
-    assert r.category == "commitment" and r.cells[0] == "<2026-10-23 Fri>" and r.cells[1] == "@Nick" and r.cells[3] == "M"
-    assert r.cells[2] == ("draft the CSV proofs runbook [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] "
+    assert r.category == "commitment" and r.when == "<2026-10-23 Fri>" and r.who == "@Nick" and r.effort == "M"
+    assert r.what == ("draft the CSV proofs runbook [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] "
                           "[[file:worklog.org::*draft the CSV proofs runbook - @Nick][↗]]")
     assert by["worklog.org::*send the sample CSV file - @Rob"].category == "waiting_on"
-    assert by["worklog.org::*send the sample CSV file - @Rob"].cells[1] == "@Rob"
+    assert by["worklog.org::*send the sample CSV file - @Rob"].who == "@Rob"
     fu = by["worklog.org::*sync with Rob on the roadmap - @Nick"]
-    assert fu.category == "follow_up" and fu.cells[1] == "@Rob" and fu.cells[0] == "<2026-10-28 Wed>"
+    assert fu.category == "follow_up" and fu.who == "@Rob" and fu.when == "<2026-10-28 Wed>"
     oq = [r for r in ledger.rows(led) if r.category == "open_question"]
-    assert len(oq) == 1 and "meetings (auto)" in ledger.last_link_target(oq[0].cells[2]) and oq[0].cells[1] == ""
+    assert len(oq) == 1 and "meetings (auto)" in ledger.last_link_target(oq[0].what) and oq[0].who == ""
     st = State.load(Paths(org).state_file)
     e = st.ledger["worklog.org::*draft the CSV proofs runbook - @Nick"]
     assert e["kind"] == "headline" and e["category"] == "commitment" and e["done_at"] is None and e["day"] == "2026-10-20"
@@ -292,6 +292,19 @@ def test_rows_land_per_category_with_links(org, tmp_path):
     assert any(k.endswith("::Open: " + OQ_TEXT) for k in st.ledger)
     q = next(v for k, v in st.ledger.items() if k.endswith("::Open: " + OQ_TEXT))
     assert q["kind"] == "bullet" and q["headline"].startswith("meetings (auto) 2026-10-22T06:31")
+
+
+def test_rerun_keeps_a_keyed_items_existing_locator(org):
+    """The stored headline of a Jira-keyed item carries the key link; the own-entry lookup must still
+    find it, so a rerun reuses the locator the row already carries instead of recomputing one."""
+    paths, people, state = _setup(org)
+    loc = "worklog.org::*draft the CSV proofs runbook"  # shorter than a fresh short_target would give
+    headline = "draft the CSV proofs runbook - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]]"
+    state.ledger[loc] = {"locator": loc, "key": f"k1|action-items.org|commitment/{loc}", "file": "worklog.org",
+                         "headline": headline, "text": "draft the CSV proofs runbook", "kind": "headline"}
+    writes = write_org.plan_writes(_digest(), "k1", paths, people, NOW, today=TODAY, done=frozenset(), ledger=state.ledger)
+    locators = [w.ledger_entry["locator"] for w in writes if w.ledger_entry and w.ledger_entry["text"] == "draft the CSV proofs runbook"]
+    assert locators == [loc]
 
 
 def test_rerun_adds_no_rows(org, tmp_path):
@@ -323,16 +336,16 @@ def test_jira_inherited_from_hand_heading(org, tmp_path):
     assert e["jira"] == "DEV-77" and e["jira_source"] == "heading"
     assert st.ledger["worklog.org::*draft the CSV proofs runbook - @Nick"]["jira_source"] == "digest"
     _, by = _rows_by_target(org)
-    assert "[[https://rmt.atlassian.net/browse/DEV-77][DEV-77]] [[file:" in by["worklog.org::*send the sample CSV file - @Rob"].cells[2]
+    assert "[[https://rmt.atlassian.net/browse/DEV-77][DEV-77]] [[file:" in by["worklog.org::*send the sample CSV file - @Rob"].what
     assert "*** send the sample CSV file - @Rob :waiting_on:auto:" in wl.read_text()  # headline unchanged
 
 
 def test_archive_month_row_links_archive_file(org, tmp_path):
     assert _cli(org, tmp_path, _digest(date="2026-09-15", title="Sept planning", attendees=["Nick"], follow_ups=[])) == 0
     _, by = _rows_by_target(org)
-    r = by["2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick"]
-    assert r.cells[2].endswith("[[file:2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick][↗]]")
-    assert State.load(Paths(org).state_file).ledger["2026/2026-09-worklog.org::*draft the CSV proofs runbook - @Nick"]["file"] == "2026/2026-09-worklog.org"
+    r = by["2026/2026-09-worklog.org::*draft the CSV proofs runbook"]
+    assert r.what.endswith("[[file:2026/2026-09-worklog.org::*draft the CSV proofs runbook][↗]]")
+    assert State.load(Paths(org).state_file).ledger["2026/2026-09-worklog.org::*draft the CSV proofs runbook"]["file"] == "2026/2026-09-worklog.org"
 
 
 def test_deleted_heading_is_recreated_at_end(org, tmp_path):

@@ -40,10 +40,11 @@ class State:
             ledger=data.get("ledger", {}),
         )
 
-    def save(self) -> None:
+    def save(self, *, replace: bool = False) -> None:
         """Merge with whatever is on disk now: two jobs (daily, arXiv) may hold the file at once.
-        Dicts and sets union (mine wins on a key), scalars take mine when set."""
-        if self.path.exists():
+        Dicts and sets union (mine wins on a key), scalars take mine when set. `replace=True` skips
+        the merge (a migration that renames keys needs the old ones gone)."""
+        if self.path.exists() and not replace:
             other = State.load(self.path)
             self.processed = {**other.processed, **self.processed}
             self.fetched = {**other.fetched, **self.fetched}

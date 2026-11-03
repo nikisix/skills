@@ -66,7 +66,7 @@ def _apply(doc: OrgDoc, e: Edit) -> None:
 
 
 def match_entry(row: Row, ledger: dict) -> tuple[str, dict] | None:
-    locator = match_locator(row.cells[2], ledger)
+    locator = match_locator(row.what, ledger)
     return (locator, ledger[locator]) if locator else None
 
 
@@ -122,7 +122,7 @@ def resolve_key(entry: dict, row: Row, doc: OrgDoc, hidx: int | None) -> str | N
     """Entry's jira, then DEV-N typed in WHAT, then in the worklog headline, then in its ancestors."""
     if entry.get("jira"):
         return entry["jira"]
-    if m := KEY_RE.search(row.cells[2]):
+    if m := KEY_RE.search(row.what):
         return m.group(0)
     if hidx is None:
         return None
@@ -258,7 +258,7 @@ def plan(paths: Paths, state: State, now: datetime) -> tuple[list[Edit], list[st
     if not paths.ledger.exists():
         return [], [], {}
     for row in rows(OrgDoc.load(paths.ledger)):
-        word = normalize_done(row.cells[4])
+        word = normalize_done(row.done)
         if word is None:
             continue
         m = match_entry(row, state.ledger)

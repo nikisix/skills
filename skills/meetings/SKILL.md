@@ -34,7 +34,7 @@ RUN="uv run --project $SKILL python $SKILL/scripts"
 | `arxiv` | weekly research scan against open work items | `$RUN/arxiv_scan.py [--dry-run]` |
 | `status` | what is in inbox / digests / state, plus ledger counts | `bash $SKILL/scripts/run.sh status` |
 | `done` | propagate checked DONE cells in `action-items.org` to the worklog item and the tron task | `bash $SKILL/scripts/run.sh done [--dry-run]` |
-| `ledger` | counts per category: open / done / untracked rows | `bash $SKILL/scripts/run.sh ledger` |
+| `ledger` | counts per category: open / done / untracked rows; `--reformat` re-wraps every table to the 140-column layout | `bash $SKILL/scripts/run.sh ledger [--reformat]` |
 | `ledger-backfill` | one-time: classify digests on disk, row every landed item | `bash $SKILL/scripts/run.sh ledger-backfill [--since YYYY-MM-DD] [--dry-run]` |
 
 Always prefer `--dry-run` first when the user is present; the scheduled job runs without it.
@@ -69,9 +69,10 @@ prompt (`references/chat-prompt.md`) is handed the open work items from `worklog
 Every action item, follow-up, and open question in a digest carries a `category` (`decision`,
 `commitment`, `waiting_on`, `follow_up`, `open_question`) and an `effort` (`S`/`M`/`L`/null). The
 worklog headline is tagged `:<category>:auto:` and the item is appended as a row to that category's
-table in `<org>/action-items.org` (`| WHEN | WHO | WHAT | EFFORT | DONE |`). The row's identity is the
-last org link in WHAT (`[[file:worklog.org::*<text> - @Owner][↗]]`), recorded in `state.json` under
-`ledger`. The user ticks DONE by hand during triage; `done` (run first in `daily`) flips the worklog
+table in `<org>/action-items.org` (`| EFFORT | DONE | WHEN | WHO | WHAT |`, lines at most 140 wide, a
+long WHAT continued on rows whose other cells are blank). The row's identity is the last org link in
+WHAT (`[[file:worklog.org::*<headline prefix>][↗]]`, the headline cut at a word boundary to 56
+characters), recorded in `state.json` under `ledger`. The user ticks DONE by hand during triage; `done` (run first in `daily`) flips the worklog
 item and moves the tron task to the bucket the DONE word names (`x` = In Review; see the runbook
 table). `ledger-backfill` classifies digests written before `category` existed
 (`references/classify-prompt.md`) and rows the items that were landed; run it once.

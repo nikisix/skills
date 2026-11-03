@@ -25,7 +25,21 @@ from pathlib import Path
 
 from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from digest import normalize_digest
-from ledger import CATEGORIES, HEADER, HEADING, PREAMBLE, RULE, link_target, realign, row_line, section_index, table_bounds, what_cell
+from ledger import (
+    CATEGORIES,
+    HEADER,
+    HEADING,
+    PREAMBLE,
+    RULE,
+    link_targets_in_use,
+    own_entry,
+    realign,
+    row_lines,
+    section_index,
+    short_target,
+    table_bounds,
+    what_cell,
+)
 from orgfile import plain_title, OrgDoc
 from people import People
 from render import (
@@ -132,8 +146,8 @@ class _Planner:
         if bounds is None:
             self.add(file, sec + 1, [HEADER, RULE], f"ledger/{category}/header")
             bounds = (sec + 1, sec + 3)
-        line = row_line(when, who, what_cell(text, jira, target), effort, done)
-        self.add(file, bounds[1], [line], f"{category}/{entry['locator']}", entry=entry)
+        lines = row_lines(doc, sec, effort, done, when, who, what_cell(text, jira, target))
+        self.add(file, bounds[1], lines, f"{category}/{entry['locator']}", entry=entry)
 
     def group(self, file: Path, day_idx: int, d: date, name: str = CHAT_GROUP) -> int:
         """Find or create the day's `** <name> :chat:auto:` heading that chat blocks nest under."""
@@ -175,13 +189,14 @@ def plan_writes(
 
     file = target_file(paths, d, today)
     link_file = str(file.relative_to(paths.org_dir))
+    taken = link_targets_in_use(ledger, exclude_key=key)  # other digests' targets; my own are recomputed
     planned: set[str] = set()
 
     def unique(obj: dict, locator_of) -> str:
         """Suffix obj['text'] with ` (n)` until its locator is unused (or is this digest's own)."""
         base, n = obj["text"], 1
         while True:
-            loc = locator_of()
+            loc = locator_of(taken | planned)
             prior = ledger.get(loc)
             if loc not in planned and (prior is None or str(prior.get("key", "")).split("|")[0] == key):
                 planned.add(loc)
@@ -189,13 +204,20 @@ def plan_writes(
             n += 1
             obj["text"] = f"{base} ({n})"
 
+    def target_for(rel: str, headline: str, tk: set[str], title: str | None = None) -> str:
+        """A rerun keeps the locator its earlier row already carries (looked up by the stored headline);
+        a new item gets a short target from `title` (the headline minus its Jira link) or the headline."""
+        mine = own_entry(ledger, key, rel, headline)
+        return mine["locator"] if mine else short_target(rel, title or headline, tk)
+
     marker_headline = meeting_body(digest, people, now)[0].split(" ", 1)[1]
-    marker_target = link_target(link_file, marker_headline)
-    item_targets = [unique(it, lambda: link_target(link_file, _locator_title(it, people))) for it in digest.get("action_items") or []]
+    marker_target = short_target(link_file, marker_headline, taken)
+    item_targets = [unique(it, lambda tk: target_for(link_file, item_headline(it, people), tk, _locator_title(it, people)))
+                    for it in digest.get("action_items") or []]
     fu_files = [target_file(paths, date.fromisoformat(fu["when"]), today) if fu.get("when") else file for fu in digest.get("follow_ups") or []]
-    fu_targets = [unique(fu, lambda: link_target(str(ff.relative_to(paths.org_dir)), followup_headline(fu, people)))
+    fu_targets = [unique(fu, lambda tk: target_for(str(ff.relative_to(paths.org_dir)), followup_headline(fu, people), tk))
                   for fu, ff in zip(digest.get("follow_ups") or [], fu_files)]
-    oq_locators = [unique(q, lambda: f"{marker_target}::Open: {q['text']}") for q in digest.get("open_questions") or []]
+    oq_locators = [unique(q, lambda tk: f"{marker_target}::Open: {q['text']}") for q in digest.get("open_questions") or []]
 
     doc = p.doc(file)
     day_idx = p.day(file, d)

@@ -138,13 +138,13 @@ def test_backfill_appends_rows_for_landed_items(org_dir):
     assert "worklog.org::*sync with Rob on the roadmap - @Nick" in st.ledger
     assert st.ledger["worklog.org::*revisit accuracy targets - @Nick"]["category"] == "decision"
     oq = [k for k in st.ledger if k.endswith("::Open: Who owns the accuracy dashboard?")]
-    assert oq == ["worklog.org::*meetings (auto) 2026-10-21T06:31 · source: slack · attendees: Nick, Rob::Open: Who owns the accuracy dashboard?"]
+    assert oq == ["worklog.org::*meetings (auto) 2026-10-21T06:31 · source:::Open: Who owns the accuracy dashboard?"]
     led = OrgDoc.load(paths.ledger)
     by = {r.category: [] for r in ledger.rows(led)}
     for r in ledger.rows(led):
         by[r.category].append(r)
     assert {k: len(v) for k, v in by.items()} == {"commitment": 2, "waiting_on": 1, "follow_up": 1, "decision": 1, "open_question": 1}
-    assert by["commitment"][0].cells[0] == "<2026-10-23 Fri>" and by["commitment"][0].cells[4] == ""
+    assert by["commitment"][0].when == "<2026-10-23 Fri>" and by["commitment"][0].done == ""
     persisted = json.loads(dj.read_text())
     assert persisted["action_items"][0]["category"] == "commitment" and persisted["open_questions"][0]["category"] == "open_question"
     assert ":auto:\n" in (org_dir / "worklog.org").read_text() and ":commitment:auto:" not in (org_dir / "worklog.org").read_text()  # no retro-tagging
@@ -158,8 +158,8 @@ def test_backfill_prefills_x_for_done_headlines(org_dir):
     st = State.load(paths.state_file)
     assert st.ledger["worklog.org::*draft the CSV proofs runbook - @Nick"]["done_at"] == "2026-11-02T07:00"
     assert st.ledger["worklog.org::*send the sample CSV file - @Rob"]["done_at"] is None
-    rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
-    assert rows["worklog.org::*draft the CSV proofs runbook - @Nick"].cells[4] == "x"
+    rows = {ledger.last_link_target(r.what): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
+    assert rows["worklog.org::*draft the CSV proofs runbook - @Nick"].done == "x"
 
 
 def test_backfill_skips_unlanded_and_unfound(org_dir, capsys):
@@ -197,7 +197,7 @@ def test_backfill_dry_run_writes_nothing(org_dir, capsys):
     before = dj.read_text()
     assert bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, True, run=fake_run, now=NOW) == 6
     assert dj.read_text() == before and not paths.ledger.exists()
-    assert "| <2026-10-23 Fri> | @Nick | draft the CSV proofs runbook" in capsys.readouterr().out
+    assert "| M |  | <2026-10-23 Fri> | @Nick | draft the CSV proofs runbook" in capsys.readouterr().out
     assert State.load(paths.state_file).ledger == {}
 
 
@@ -224,10 +224,10 @@ def test_backfill_locates_headline_as_landed_when_classifier_links_key(org_dir):
     answer["action_items"][2]["jira"] = "DEV-10900"  # in the tron fixture's In Progress
     n = bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=lambda p: json.dumps(answer), now=NOW)
     assert n == 6
-    e = State.load(paths.state_file).ledger["worklog.org::*build a proof-diff tool for CSV exports - @Nick"]
+    e = State.load(paths.state_file).ledger["worklog.org::*build a proof-diff tool for CSV exports"]
     assert e["jira"] == "DEV-10900" and e["headline"] == "build a proof-diff tool for CSV exports - @Nick"
-    rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
-    assert "[[https://rmt.atlassian.net/browse/DEV-10900][DEV-10900]] [[file:" in rows["worklog.org::*build a proof-diff tool for CSV exports - @Nick"].cells[2]
+    rows = {ledger.last_link_target(r.what): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
+    assert "[[https://rmt.atlassian.net/browse/DEV-10900][DEV-10900]] [[file:" in rows["worklog.org::*build a proof-diff tool for CSV exports"].what
 
 
 def test_backfill_logs_every_skip(org_dir, capsys):
@@ -274,7 +274,7 @@ def test_backfill_legacy_bullet_marker_links_block_heading(org_dir):
     e = State.load(paths.state_file).ledger["worklog.org::*Rob 1-1::Open: Who owns the accuracy dashboard?"]
     assert e["kind"] == "bullet" and e["headline"] == "Rob 1-1"
     oq = [r for r in ledger.rows(OrgDoc.load(paths.ledger)) if r.category == "open_question"]
-    assert len(oq) == 1 and ledger.last_link_target(oq[0].cells[2]) == "worklog.org::*Rob 1-1"
+    assert len(oq) == 1 and ledger.last_link_target(oq[0].what) == "worklog.org::*Rob 1-1"
 
 
 def test_backfill_finds_dated_followup_moved_to_another_day(org_dir, capsys):
@@ -288,5 +288,5 @@ def test_backfill_finds_dated_followup_moved_to_another_day(org_dir, capsys):
     assert "found under 2026-10-29 (moved by hand)" in capsys.readouterr().out
     e = State.load(paths.state_file).ledger["worklog.org::*sync with Rob on the roadmap - @Nick"]
     assert e["day"] == "2026-10-29"
-    rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
-    assert rows["worklog.org::*sync with Rob on the roadmap - @Nick"].cells[0] == "<2026-10-29 Thu>"
+    rows = {ledger.last_link_target(r.what): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
+    assert rows["worklog.org::*sync with Rob on the roadmap - @Nick"].when == "<2026-10-29 Thu>"
