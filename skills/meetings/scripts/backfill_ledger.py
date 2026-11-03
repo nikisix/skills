@@ -186,12 +186,23 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
     def done_of(hdoc: OrgDoc, idx: int) -> tuple[str, str | None]:
         return ("x", now.isoformat(timespec="minutes")) if headline_parts(hdoc.lines[idx])[1] == "DONE" else ("", None)
 
+    def rowed(locator: str, headline: str) -> bool:
+        """True when the locator already has an entry. Our own entry (a rerun) is silent; another
+        digest's means a same-text item the backfill cannot suffix, so it says so."""
+        prior = state.ledger.get(locator)
+        if prior is None:
+            return False
+        owner = str(prior.get("key", "")).split("|")[0]
+        if owner != key:
+            log(f"backfill: {key}: '{headline}' already rowed by {owner}, no row (same text; the backfill cannot suffix a landed headline)")
+        return True
+
     items = d.get("action_items") or []
     landed_jira = landed_jira if landed_jira is not None else [it.get("jira") for it in items]
     for it, was in zip(items, landed_jira):
         headline = item_headline({**it, "jira": was}, people)
         target = link_target(link_file, _locator_title(it, people))
-        if target in state.ledger:
+        if rowed(target, headline):
             continue
         h = doc.find_headline(headline, start, end)
         if h is None:
@@ -211,7 +222,11 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
         if fu.get("when"):
             when = date.fromisoformat(fu["when"])
             fdoc, frel = _file_with_day(paths, when)
-            if fdoc is None or f"{key}|{Path(frel).name}|{when.isoformat()}/followup/{i}" not in state.processed:
+            if fdoc is None:
+                log(f"backfill: {key}: '{headline}' day {when.isoformat()} is in no worklog file, skipped")
+                continue
+            if f"{key}|{Path(frel).name}|{when.isoformat()}/followup/{i}" not in state.processed:
+                log(f"backfill: {key}: '{headline}' never landed (no processed key), skipped")
                 continue
             fday = fdoc.find_day(when)
             h = fdoc.find_headline(headline, fday, fdoc.section_end(fday))
@@ -221,7 +236,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             h = doc.find_headline(headline, start, end)
             target = link_target(link_file, headline)
             day_s, when_s, hdoc, frel = day, "", doc, link_file
-        if target in state.ledger:
+        if rowed(target, headline):
             continue
         if h is None:
             log(f"backfill: {key}: '{headline}' not found in {frel}, skipped")
@@ -240,7 +255,7 @@ def plan_rows(d: dict, key: str, paths: Paths, people: People, state: State, now
             for q in qs:
                 text = q.get("text") if isinstance(q, dict) else str(q)
                 locator = f"{marker_target}::Open: {text}"
-                if locator in state.ledger:
+                if rowed(locator, f"Open: {text}"):
                     continue
                 if not any(doc.lines[j].strip() == f"- Open: {text}" for j in range(m, doc.section_end(m))):
                     log(f"backfill: {key}: open question '{text}' not found under the marker, skipped")

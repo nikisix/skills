@@ -228,3 +228,30 @@ def test_backfill_locates_headline_as_landed_when_classifier_links_key(org_dir):
     assert e["jira"] == "DEV-10900" and e["headline"] == "build a proof-diff tool for CSV exports - @Nick"
     rows = {ledger.last_link_target(r.cells[2]): r for r in ledger.rows(OrgDoc.load(paths.ledger))}
     assert "[[https://rmt.atlassian.net/browse/DEV-10900][DEV-10900]] [[file:" in rows["worklog.org::*build a proof-diff tool for CSV exports - @Nick"].cells[2]
+
+
+def test_backfill_logs_every_skip(org_dir, capsys):
+    """A same-text item from another digest, a follow-up that never landed, a follow-up whose day is
+    in no file: each skip says why (the backfill cannot suffix headlines, so these need eyes)."""
+    paths, _ = _setup(org_dir, keys=[k for k in KEYS if "followup" not in k])
+    # a second landed digest on 10-21 repeating Rob's item word for word
+    wl = org_dir / "worklog.org"
+    wl.write_text(wl.read_text().replace("** Reeder MR :meeting:\n   - reviewed the synonyms MR\n",
+                                         "** Reeder MR :meeting:\n   - reviewed the synonyms MR\n*** send the sample CSV file - @Rob :auto:\n"))
+    _age(wl)
+    d2 = _legacy_digest()
+    d2.update(date="2026-10-21", title="Reeder MR", attendees=["Nick", "David"], follow_ups=[], open_questions=[],
+              action_items=[d2["action_items"][1]], landed={"file": "worklog.org", "heading": "Reeder MR"})
+    (org_dir / "meetings" / "digests" / "2026-10-21-reeder-mr.json").write_text(json.dumps(d2) + "\n")
+    st = State.load(paths.state_file)
+    st.processed["k2|worklog.org|2026-10-21/Reeder MR"] = {"file": str(paths.worklog), "line": 1, "at": "x"}
+    st.save()
+    answer2 = {"action_items": [CLASSIFIED["action_items"][1]], "follow_ups": [], "open_questions": []}
+    run = lambda p: json.dumps(answer2 if "Reeder MR" in p else CLASSIFIED)
+    n = bl.backfill(paths, State.load(paths.state_file), People.load(paths.people_file), None, False, run=run, now=NOW)
+    out = capsys.readouterr().out
+    assert n == 5  # k1: 3 items + undated follow-up + OQ; the dated follow-up never landed, k2's item is a duplicate
+    assert "k1: 'sync with Rob on the roadmap - @Nick' never landed" in out
+    assert "k2: 'send the sample CSV file - @Rob' already rowed by k1, no row" in out
+    st = State.load(paths.state_file)
+    assert st.ledger["worklog.org::*send the sample CSV file - @Rob"]["key"].startswith("k1|")
