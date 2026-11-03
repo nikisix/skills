@@ -59,10 +59,10 @@ is marked done, and when the item maps to a tron task, that task moves to the bu
 #+STARTUP: showall
 
 * Decision
-| EFFORT | DONE | WHEN             | WHO    | WHAT                                                                                 |
-|--------+------+------------------+--------+--------------------------------------------------------------------------------------|
-| M      |      | <2026-10-28 Wed> | @Mitch | Quick call to resolve how statutory classification and state scoping will work for   |
-|        |      |                  |        | Statutory Disability / PFML. [[file:worklog.org::*Quick call to resolve how statutory][↗]] |
+| EFFORT | DONE | WHEN             | WHO    | WHAT                                                                                           |
+|--------+------+------------------+--------+------------------------------------------------------------------------------------------------|
+| M      |      | <2026-10-28 Wed> | @Mitch | Quick call to resolve how statutory classification and state scoping will work for Statutory   |
+|        |      |                  |        | Disability / PFML. [[file:worklog.org::*Quick call to resolve how statutory][↗]]               |
 
 * Commitment
 | EFFORT | DONE | WHEN | WHO | WHAT |
