@@ -9,3 +9,11 @@
 * Needs Refinement
 * Done
 ** Old thing - @Nick - [[https://rmt.atlassian.net/browse/DEV-1][DEV-1]]
+* In Review
+* Ready for QA
+* In QA
+* Accepted
+* Closed
+* Reopen
+* Blocked (do not sync)
+* Maybe (do not sync)
