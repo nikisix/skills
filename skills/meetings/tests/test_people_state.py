@@ -67,3 +67,13 @@ def test_state_save_merges_concurrent_keys(org_dir):
     c = State.load(path)
     assert c.processed == {"w1": {"file": "x"}} and c.last_teams_poll == "2026-10-22T06:30"
     assert c.arxiv_seen == {"2610.1"} and c.last_arxiv_run == "2026-10-22"
+
+
+def test_state_ledger_round_trip_and_merge(tmp_path):
+    s = State(path=tmp_path / "s.json")
+    s.ledger["worklog.org::*a - @Nick"] = {"done_at": None}
+    s.save()
+    t = State.load(tmp_path / "s.json")
+    t.ledger["worklog.org::*b - @Nick"] = {"done_at": None}
+    t.save()
+    assert set(State.load(tmp_path / "s.json").ledger) == {"worklog.org::*a - @Nick", "worklog.org::*b - @Nick"}

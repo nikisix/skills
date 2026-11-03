@@ -72,11 +72,11 @@ def test_body_bullets_sit_under_the_marker_subheading(org_dir):
 def test_mine_vs_others_keyword(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
-    assert "*** send the sample CSV file - @Rob :auto:" in lines
-    assert "*** TODO build a proof-diff tool for CSV exports - @Nick :auto:" in lines
+    assert "*** send the sample CSV file - @Rob :waiting_on:auto:" in lines
+    assert "*** TODO build a proof-diff tool for CSV exports - @Nick :commitment:auto:" in lines
     # dated follow-up is NOT in the block; undated one is, with a TBD bullet
     assert not any("sync with Rob on the roadmap" in l for l in lines)
-    i = lines.index("*** TODO revisit accuracy targets - @Nick :auto:")
+    i = lines.index("*** TODO revisit accuracy targets - @Nick :follow_up:auto:")
     assert lines[i + 1] == "    - when: TBD"
 
 
@@ -84,7 +84,7 @@ def test_jira_link_placement(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
     i = lines.index(
-        "*** TODO draft the CSV proofs runbook - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] :auto:"
+        "*** TODO draft the CSV proofs runbook - @Nick - [[https://rmt.atlassian.net/browse/DEV-10173][DEV-10173]] :commitment:auto:"
     )
     assert lines[i + 1] == "    DEADLINE: <2026-10-23 Fri>"
 
@@ -96,15 +96,15 @@ def test_unresolved_owner(org_dir):
         {"text": "find an owner", "owner": None, "due": None, "jira": None, "ticket_worthy": False},
     ]
     lines = render.meeting_block(d, people(org_dir), datetime(2026, 10, 22, 6, 31), new_heading=True)
-    assert "*** ping legal - @Mitch Slavens :auto:" in lines  # named but off-roster: keep the name
-    assert "*** find an owner - @? :auto:" in lines  # nobody named: a finding
+    assert "*** ping legal - @Mitch Slavens :waiting_on:auto:" in lines  # named but off-roster: keep the name
+    assert "*** find an owner - @? :waiting_on:auto:" in lines  # nobody named: a finding
 
 
 def test_followup_item_shape(org_dir):
     d = json.loads((FIX / "digest-good.json").read_text())
     lines = render.followup_item(d["follow_ups"][0], d, people(org_dir))
     assert lines == [
-        "** TODO sync with Rob on the roadmap - @Nick :auto:",
+        "** TODO sync with Rob on the roadmap - @Nick :follow_up:auto:",
         "   SCHEDULED: <2026-10-28 Wed>",
         "   - from: [[file:worklog.org::*Rob 1:1][2026-10-20 Rob 1:1]]",
     ]
@@ -174,3 +174,25 @@ def test_chat_block_renders_one_level_deeper(org_dir):
     assert lines[1].startswith("**** meetings (auto) 2026-10-22T06:31")
     assert all(l.startswith(("**** ", "   - ", "    ")) for l in lines[2:])  # 4-space: DEADLINE / "- when: TBD"
     assert any(l.startswith("**** TODO ") for l in lines)
+
+
+def test_item_line_carries_category_tag(org_dir):
+    item = {"text": "Ship it", "owner": "Nick", "due": None, "jira": "DEV-1", "ticket_worthy": False,
+            "category": "commitment", "effort": "S"}
+    assert render._item_lines(item, people(org_dir))[0] == (
+        "*** TODO Ship it - @Nick - [[https://rmt.atlassian.net/browse/DEV-1][DEV-1]] :commitment:auto:")
+    assert render.item_headline(item, people(org_dir)) == "Ship it - @Nick - [[https://rmt.atlassian.net/browse/DEV-1][DEV-1]]"
+    other = {"text": "Send it", "owner": "Rob", "due": None, "jira": None, "ticket_worthy": False}  # legacy: no category
+    assert render._item_lines(other, people(org_dir))[0] == "*** Send it - @Rob :waiting_on:auto:"
+
+
+def test_followup_lines_carry_follow_up_tag(org_dir):
+    d = json.loads((FIX / "digest-good.json").read_text())
+    fu = {"text": "Sync w/ Rob", "with": ["Rob"], "when": "2026-10-24", "category": "follow_up", "effort": None}
+    assert render.followup_item(fu, d, people(org_dir))[0] == "** TODO Sync w/ Rob - @Nick :follow_up:auto:"
+    assert render.followup_headline(fu, people(org_dir)) == "Sync w/ Rob - @Nick"
+    fu["category"] = "decision"
+    assert render.followup_item(fu, d, people(org_dir))[0].endswith(":decision:auto:")
+    undated = {"text": "revisit targets", "with": ["Rob"], "when": None, "category": "follow_up", "effort": None}
+    d["follow_ups"], d["action_items"] = [undated], []
+    assert render.meeting_children(d, people(org_dir))[0] == "*** TODO revisit targets - @Nick :follow_up:auto:"

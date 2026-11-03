@@ -87,11 +87,25 @@ def _jira_suffix(key: str | None) -> str:
     return f" - [[{JIRA_BROWSE}{key}][{key}]]" if key else ""
 
 
+def item_category(item: dict, people: People) -> str:
+    """The item's category tag; a legacy item without one splits by owner (mine -> commitment)."""
+    return item.get("category") or ("commitment" if people.is_me(item.get("owner")) else "waiting_on")
+
+
+def item_headline(item: dict, people: People) -> str:
+    """Headline text without keyword or tags: the form a `::*` link resolves against (the locator)."""
+    return f"{org_text(item['text'])}{_owner_suffix(item.get('owner'), people)}{_jira_suffix(item.get('jira'))}"
+
+
+def followup_headline(fu: dict, people: People) -> str:
+    return f"{org_text(fu['text'])} - @{people.me}"
+
+
 def _item_lines(item: dict, people: People, level: int = 2) -> list[str]:
     mine = people.is_me(item.get("owner"))
     keyword = "TODO " if mine else ""
     stars = "*" * (level + 1)
-    head = f"{stars} {keyword}{org_text(item['text'])}{_owner_suffix(item.get('owner'), people)}{_jira_suffix(item.get('jira'))} :auto:"
+    head = f"{stars} {keyword}{item_headline(item, people)} :{item_category(item, people)}:auto:"
     lines = [head]
     if item.get("due"):
         lines.append(f"    DEADLINE: {org_date(date.fromisoformat(item['due']))}")
@@ -124,7 +138,7 @@ def meeting_children(d: dict, people: People, level: int = 2) -> list[str]:
     for fu in d.get("follow_ups") or []:
         if fu.get("when"):
             continue  # dated follow-ups live under their target day (write_org)
-        lines.append(f"{stars} TODO {org_text(fu['text'])} - @{people.me} :auto:")
+        lines.append(f"{stars} TODO {followup_headline(fu, people)} :{fu.get('category') or 'follow_up'}:auto:")
         lines.append("    - when: TBD")
     return lines
 
@@ -141,7 +155,7 @@ def followup_item(fu: dict, d: dict, people: People, link_file: str = "worklog.o
     """`d['title']` should be the heading the meeting actually landed under, so the backlink resolves."""
     when = date.fromisoformat(fu["when"])
     return [
-        f"** TODO {org_text(fu['text'])} - @{people.me} :auto:",
+        f"** TODO {followup_headline(fu, people)} :{fu.get('category') or 'follow_up'}:auto:",
         f"   SCHEDULED: {org_date(when)}",
         f"   - from: [[file:{link_file}::*{org_text(d['title'])}][{d['date']} {org_text(d['title'])}]]",
     ]

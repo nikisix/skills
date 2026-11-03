@@ -19,6 +19,7 @@ class State:
     arxiv_seen: set[str] = field(default_factory=set)
     arxiv_queries: dict[str, list[str]] = field(default_factory=dict)
     own_saves: dict[str, int] = field(default_factory=dict)  # org file -> st_mtime_ns after our last write
+    ledger: dict[str, dict] = field(default_factory=dict)  # action-items.org row locator -> entry
 
     @classmethod
     def load(cls, path: Path) -> "State":
@@ -36,6 +37,7 @@ class State:
             arxiv_seen=set(data.get("arxiv_seen", [])),
             arxiv_queries=data.get("arxiv_queries", {}),
             own_saves=data.get("own_saves", {}),
+            ledger=data.get("ledger", {}),
         )
 
     def save(self) -> None:
@@ -48,6 +50,7 @@ class State:
             self.arxiv_seen |= other.arxiv_seen
             self.arxiv_queries = {**other.arxiv_queries, **self.arxiv_queries}
             self.own_saves = {**other.own_saves, **self.own_saves}
+            self.ledger = {**other.ledger, **self.ledger}
             self.last_teams_poll = self.last_teams_poll or other.last_teams_poll
             self.last_slack_poll = max(filter(None, [self.last_slack_poll, other.last_slack_poll]), default=None)
             self.last_arxiv_run = self.last_arxiv_run or other.last_arxiv_run
@@ -60,6 +63,7 @@ class State:
             "arxiv_seen": sorted(self.arxiv_seen),
             "arxiv_queries": self.arxiv_queries,
             "own_saves": self.own_saves,
+            "ledger": self.ledger,
         }
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".json.tmp")

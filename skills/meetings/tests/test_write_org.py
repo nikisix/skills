@@ -62,7 +62,7 @@ def test_merge_under_existing_heading(org):
     assert block[0] == "   - my own notes about accuracy"  # my line stays first and unchanged
     assert "*** meetings (auto) 2026-10-22T06:31 · source: slack · attendees: Nick, Rob" in block
     assert any(l.startswith("*** TODO draft the CSV proofs runbook - @Nick - [[") and l.endswith(":auto:") for l in block)
-    assert "*** TODO revisit accuracy targets - @Nick :auto:" in block
+    assert "*** TODO revisit accuracy targets - @Nick :follow_up:auto:" in block
     assert not any("** Rob 1:1" in l for l in lines)  # no second heading
 
 
@@ -80,11 +80,11 @@ def test_dated_followup_under_target_day(org):
     day = lines.index("* <2026-10-28 Wed>")
     assert lines.index("* <2026-10-21 Wed>") < day < lines.index("* TODO")
     assert lines[day + 1 : day + 4] == [
-        "** TODO sync with Rob on the roadmap - @Nick :auto:",
+        "** TODO sync with Rob on the roadmap - @Nick :follow_up:auto:",
         "   SCHEDULED: <2026-10-28 Wed>",
         "   - from: [[file:worklog.org::*Rob 1-1][2026-10-20 Rob 1-1]]",  # links the heading it merged into
     ]
-    assert "** TODO sync with Rob on the roadmap - @Nick :auto:" not in lines[: lines.index("* <2026-10-21 Wed>")]
+    assert "** TODO sync with Rob on the roadmap - @Nick :follow_up:auto:" not in lines[: lines.index("* <2026-10-21 Wed>")]
 
 
 def test_followup_future_month_goes_to_worklog(org):
