@@ -29,6 +29,10 @@ class Paths:
         return self.org_dir / "tron-tasks.org"
 
     @property
+    def ledger(self) -> Path:
+        return self.org_dir / "action-items.org"
+
+    @property
     def meetings_dir(self) -> Path:
         return self.org_dir / "meetings"
 
