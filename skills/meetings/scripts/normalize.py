@@ -1,11 +1,14 @@
 """Normalize a transcript file (txt / vtt / docx) into canonical text plus metadata.
 
-Filename convention: YYYY-MM-DD[-HHMM]-<slug>.<ext> (a doubled '-' before the slug is tolerated).
-Optional front-matter (key: value lines up to the first blank line) overrides filename-derived fields.
+Filename convention: YYYY-MM-DD[-HHMM]-<slug>.<ext> (month and day may be unpadded; a doubled '-'
+before the slug is tolerated). Optional front-matter (key: value lines up to the first blank line)
+overrides filename-derived fields.
 
-A .txt copied from the Teams transcript panel (speaker turns rendered as initials / name /
-"N minutes N secondsN:NN" / "Name N minutes N seconds" / utterance) is detected by shape and
-reduced to "Name: utterance" lines, with attendees taken from the speakers.
+Three pasted shapes are detected and reduced to "Name: utterance" lines, with attendees taken from
+the speakers: a .txt copied from the Teams transcript panel (initials / name / "Name N minutes N
+seconds" / utterance), a Teams meeting-recording transcript (.docx download or its text: `Name   M:SS`
+stamp, utterance below), and a Slack huddle copied from the captions pane (`Name` alone on a line,
+utterance on the next, blank line between turns).
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
-FILENAME_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-(\d{2})(\d{2}))?-+(.+)$")
+FILENAME_RE = re.compile(r"^(\d{4})-(\d{1,2})-(\d{1,2})(?:-(\d{2})(\d{2}))?-+(.+)$")  # month/day may be unpadded
 FRONTMATTER_KEYS = {"title", "date", "time", "source", "attendees", "kind"}
 KINDS = ("meeting", "chat")
 SPEAKER_TAG_RE = re.compile(r"<v\s+([^>]+)>")
@@ -28,6 +31,13 @@ SOURCE_BY_EXT = {".vtt": "teams", ".docx": "teams"}
 # The panel also prints "0 minutes 5 seconds0:05" (no name, clock suffix), which must not match.
 TEAMS_STAMP_RE = re.compile(r"^(?P<name>\S.*?) (?:(?P<hr>\d+) hours? )?(?P<min>\d+) minutes? (?P<sec>\d+) seconds?$")
 TEAMS_MIN_STAMPS = 2
+# Teams "Meeting Recording" transcript download (.docx, or its text pasted): `Name   M:SS` / `H:MM:SS`
+TEAMS_CLOCK_RE = re.compile(r"^(?P<name>\S.*?)\s{2,}(?P<clock>\d{1,2}:\d{2}(?::\d{2})?)$")
+TEAMS_NOTICE_RE = re.compile(r"^\S.*? (?:started|stopped) transcription$")
+# Slack huddle captions copied out: the name alone on a line, the utterance on the next, a blank line between
+HUDDLE_NAME_RE = re.compile(r"^[A-Z][^\s:]*(?: [A-Z][^\s:]*){0,3}$")
+HUDDLE_NOTICE_RE = re.compile(r"^(?:started|stopped|joined|left) (?:screen sharing|recording|transcription|the huddle)\.?$")
+HUDDLE_MIN_BLOCKS = 3
 
 
 @dataclass
@@ -64,10 +74,10 @@ def parse_filename(name: str) -> Meta:
     m = FILENAME_RE.match(path.stem)
     if not m:
         raise ValueError(f"filename must look like YYYY-MM-DD[-HHMM]-<slug>.<ext>: {name}")
-    day, hh, mm, slug = m.groups()
+    yyyy, mo, dd, hh, mm, slug = m.groups()
     return Meta(
         title=slug_to_title(slug),
-        date=date.fromisoformat(day),
+        date=date(int(yyyy), int(mo), int(dd)),
         time=f"{hh}:{mm}" if hh else None,
         source=SOURCE_BY_EXT.get(path.suffix.lower(), "manual"),
         stem=path.stem,
@@ -146,11 +156,68 @@ def parse_teams_copy(text: str) -> tuple[list[str], str] | None:
             speakers.append(name)
         if not utterance:
             continue
-        if turns and turns[-1][0] == name:
-            turns[-1][1] += " " + utterance
-        else:
-            turns.append([name, utterance])
+        _merge_turns(turns, name, utterance)
     if stamps < TEAMS_MIN_STAMPS:
+        return None
+    return speakers, "\n".join(f"{who}: {what}" for who, what in turns) + "\n"
+
+
+def _merge_turns(turns: list[list[str]], name: str, utterance: str) -> None:
+    if turns and turns[-1][0] == name:
+        turns[-1][1] += " " + utterance
+    else:
+        turns.append([name, utterance])
+
+
+def parse_teams_recording(text: str) -> tuple[list[str], str] | None:
+    """Reduce a Teams meeting-recording transcript (`Name   M:SS` stamp, utterance on the lines after,
+    until the next stamp or a blank line) to (speakers, "Name: utterance" lines). The title, date,
+    duration, and started/stopped-transcription notices are dropped. None when the shape is absent."""
+    speakers: list[str] = []
+    turns: list[list[str]] = []
+    stamps = 0
+    current: str | None = None
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = TEAMS_CLOCK_RE.match(line)
+        if m:
+            stamps += 1
+            current = m.group("name")
+            if current not in speakers:
+                speakers.append(current)
+            continue
+        if not line:
+            current = None
+            continue
+        if current is None or TEAMS_NOTICE_RE.match(line):
+            continue
+        _merge_turns(turns, current, line)
+    if stamps < TEAMS_MIN_STAMPS:
+        return None
+    return speakers, "\n".join(f"{who}: {what}" for who, what in turns) + "\n"
+
+
+def parse_slack_huddle(text: str) -> tuple[list[str], str] | None:
+    """Reduce a copied Slack huddle transcript (blocks of `Name` / utterance separated by blank lines)
+    to (speakers, "Name: utterance" lines). Every block must have that shape and at least two people
+    must speak, so prose paragraphs and `Name: text` chat do not match. Same-speaker runs merge;
+    system notices ("started screen sharing.") are dropped."""
+    blocks = [b.strip().split("\n") for b in re.split(r"\n\s*\n", text) if b.strip()]
+    if len(blocks) < HUDDLE_MIN_BLOCKS:
+        return None
+    speakers: list[str] = []
+    turns: list[list[str]] = []
+    for block in blocks:
+        name = block[0].strip()
+        if len(block) < 2 or not HUDDLE_NAME_RE.match(name):
+            return None
+        if name not in speakers:
+            speakers.append(name)
+        utterance = " ".join(l.strip() for l in block[1:] if l.strip())
+        if HUDDLE_NOTICE_RE.match(utterance):
+            continue
+        _merge_turns(turns, name, utterance)
+    if len(speakers) < 2:
         return None
     return speakers, "\n".join(f"{who}: {what}" for who, what in turns) + "\n"
 
@@ -175,10 +242,18 @@ def normalize(path: Path) -> tuple[Meta, str]:
     path = Path(path)
     meta = parse_filename(path.name)
     fm, body = parse_frontmatter(read_transcript(path))
-    teams = parse_teams_copy(body) if path.suffix.lower() == ".txt" else None
-    if teams:
-        meta.attendees, body = teams
-        meta.source = "teams"
+    suffix = path.suffix.lower()
+    parsed = None
+    if suffix == ".txt":
+        parsed = parse_teams_copy(body) or parse_teams_recording(body)
+        if parsed:
+            meta.source = "teams"
+        elif (parsed := parse_slack_huddle(body)):
+            meta.source = "slack"
+    elif suffix == ".docx":
+        parsed = parse_teams_recording(body)
+    if parsed:
+        meta.attendees, body = parsed
     if "title" in fm:
         meta.title = fm["title"]
     if "date" in fm:
