@@ -1,13 +1,21 @@
-"""Pull transcripts of Teams meetings I organized into meetings/inbox via the PnP `m365` CLI.
+"""Pull transcripts of Teams meetings into meetings/inbox via the PnP `m365` CLI.
 
-Window = state.last_teams_poll (or now - 14 days on first run) .. now. Each transcript is keyed
-`teams:<meetingId>:<transcriptId>` in state.fetched so it is downloaded once. Files are named
+Two routes, both keyed `teams:<meetingId>:<transcriptId>` in state.fetched so a transcript is
+downloaded once whichever route finds it:
+  calendar  `teams meeting list --isOrganizer` over the window: meetings I organized, named from the
+            meeting's own start time.
+  chats     `teams chat list --type meeting`: every meeting I attended has a meeting chat; the chats
+            touched inside the window are resolved to their online meeting by join URL (works for
+            attendees, not only organizers) and their transcripts fetched. A recurring series shares one
+            meeting whose startDateTime is the series start, so these files are named from the
+            transcript's createdDateTime (the end of that occurrence) instead.
+Window = state.last_teams_poll (or now - 14 days on first run) .. now. Files are named
 YYYY-MM-DD-HHMM-<slug>.vtt in America/Los_Angeles so normalize.py reads date/time/title from them.
 
 Requires: `npm i -g @pnp/cli-microsoft365` plus your own Entra app (CLI v10+ has no default one):
-delegated Calendars.Read (meeting list walks the calendar) + OnlineMeetings.Read +
-OnlineMeetingTranscript.Read.All (admin consent), `m365 cli config set` clientId/tenantId/authType=browser,
-then `m365 login`. Steps: ~/org/ringmaster/CLAUDE-meetings.md.
+delegated Calendars.Read (meeting list walks the calendar) + Chat.ReadBasic (chat list) +
+OnlineMeetings.Read + OnlineMeetingTranscript.Read.All (admin consent), `m365 cli config set`
+clientId/tenantId/authType=browser, then `m365 login`. Steps: ~/org/ringmaster/CLAUDE-meetings.md.
 
 Usage: fetch_teams.py [--since ISO] [--dry-run]
 """
@@ -31,6 +39,8 @@ M365_BIN = "m365"
 FIRST_RUN_DAYS = 14
 OVERLAP_DAYS = 2  # a meeting still running at the last poll had no transcript yet; fetched keys dedup
 EXIT_NOTHING = 2
+SCOPE_HINT = ("listing meeting chats needs the delegated Chat.ReadBasic scope on the app: add it, have it consented, "
+              "then `m365 logout && m365 login` so the token carries it")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
@@ -47,9 +57,33 @@ def graph_time(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def graph_datetime(raw: str) -> datetime:
+    """Graph gives 7 fractional digits and a Z; fromisoformat wants at most 6 and an offset."""
+    raw = re.sub(r"(\.\d{1,6})\d*(?=Z|[+-]\d{2}:\d{2}$)", r"\1", raw)
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+
 def list_meetings(start: datetime, end: datetime) -> list[dict]:
     out = m365(["teams", "meeting", "list", "--isOrganizer", "--startDateTime", graph_time(start), "--endDateTime", graph_time(end)])
     return list(out or [])
+
+
+def list_meeting_chats() -> list[dict]:
+    """Every chat of type `meeting` I am a member of (the CLI pages through all of them)."""
+    try:
+        return list(m365(["teams", "chat", "list", "--type", "meeting"]) or [])
+    except RuntimeError as exc:
+        if re.search(r"scope|denied|forbidden|403|authoriz", str(exc), re.I):
+            raise RuntimeError(f"{exc}\n{SCOPE_HINT}") from exc
+        raise
+
+
+def meeting_by_join_url(join_url: str) -> dict | None:
+    """Resolve a meeting chat's join URL to its onlineMeeting; accepts an attendee's token, not only the organizer's."""
+    out = m365(["teams", "meeting", "get", "--joinUrl", join_url])
+    if isinstance(out, list):
+        out = out[0] if out else None
+    return out or None
 
 
 def list_transcripts(meeting_id: str) -> list[dict]:
@@ -70,11 +104,20 @@ def slug(subject: str) -> str:
     return _SLUG_RE.sub("-", subject.lower()).strip("-")[:60].strip("-") or "meeting"
 
 
-def inbox_name(meeting: dict) -> str:
-    raw = meeting["startDateTime"]
-    raw = re.sub(r"(\.\d{1,6})\d*(?=Z|[+-]\d{2}:\d{2}$)", r"\1", raw)  # Graph gives 7 fractional digits
-    start = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(ZoneInfo(TIMEZONE))
+def inbox_name(meeting: dict, when: str | None = None) -> str:
+    """`when` (a Graph timestamp) overrides the meeting's startDateTime, for occurrences of a series."""
+    start = graph_datetime(when or meeting["startDateTime"]).astimezone(ZoneInfo(TIMEZONE))
     return f"{start:%Y-%m-%d-%H%M}-{slug(meeting.get('subject') or '')}.vtt"
+
+
+def _unique(name: str, inbox: Path, taken: set[str]) -> str:
+    stem, ext = name.rsplit(".", 1)
+    cand, n = name, 1
+    while cand in taken or (inbox / cand).exists():
+        n += 1
+        cand = f"{stem}-{n}.{ext}"
+    taken.add(cand)
+    return cand
 
 
 def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = None, dry_run: bool = False) -> list[Path]:
@@ -82,25 +125,55 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
     if since is None:
         since = (datetime.fromisoformat(state.last_teams_poll) - timedelta(days=OVERLAP_DAYS)) if state.last_teams_poll else now - timedelta(days=FIRST_RUN_DAYS)
     written: list[Path] = []
+    taken: set[str] = set()
+
+    def land(meeting: dict, t: dict, name: str) -> None:
+        key = f"teams:{meeting['id']}:{t['id']}"
+        if key in state.fetched:
+            return
+        out = paths.inbox / name
+        if dry_run:
+            print(f"would fetch {out}")
+            return
+        download(meeting["id"], t["id"], out)
+        state.fetched[key] = {"file": out.name, "subject": meeting.get("subject") or ""}
+        written.append(out)
+        print(out)
+
     for meeting in list_meetings(since, now):
         for i, t in enumerate(list_transcripts(meeting["id"])):
-            key = f"teams:{meeting['id']}:{t['id']}"
-            if key in state.fetched:
-                continue
             name = inbox_name(meeting)
             if i:
                 name = name.replace(".vtt", f"-{i + 1}.vtt")
-            out = paths.inbox / name
-            if dry_run:
-                print(f"would fetch {out}")
+            taken.add(name)
+            land(meeting, t, name)
+
+    chats_error: RuntimeError | None = None
+    try:
+        for chat in list_meeting_chats():
+            join_url = (chat.get("onlineMeetingInfo") or {}).get("joinWebUrl")
+            touched = chat.get("lastUpdatedDateTime") or chat.get("createdDateTime")
+            if not join_url or not touched or graph_datetime(touched) < since:
                 continue
-            download(meeting["id"], t["id"], out)
-            state.fetched[key] = {"file": out.name, "subject": meeting.get("subject") or ""}
-            written.append(out)
-            print(out)
+            try:
+                meeting = meeting_by_join_url(join_url)
+                transcripts = list_transcripts(meeting["id"]) if meeting else []
+            except RuntimeError as exc:
+                print(f"teams: skipping chat {chat.get('topic') or chat.get('id')}: {exc}", file=sys.stderr)
+                continue
+            for t in transcripts:
+                if f"teams:{meeting['id']}:{t['id']}" in state.fetched:
+                    continue
+                land(meeting, t, _unique(inbox_name(meeting, when=t.get("createdDateTime")), paths.inbox, taken))
+    except RuntimeError as exc:
+        chats_error = exc  # keep what the calendar route landed; do not advance the window past what was missed
+
     if not dry_run:
-        state.last_teams_poll = now.isoformat()
+        if chats_error is None:
+            state.last_teams_poll = now.isoformat()
         state.save()
+    if chats_error is not None:
+        raise chats_error
     return written
 
 

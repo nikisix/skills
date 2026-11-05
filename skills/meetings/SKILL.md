@@ -29,7 +29,7 @@ RUN="uv run --project $SKILL python $SKILL/scripts"
 | `write <digest.json>` | render + insert into worklog (merge/new heading, dated follow-ups) | `$RUN/write_org.py <digest.json> --key <key> [--dry-run]` |
 | `suggest <digest.json>` | append ticket suggestions | `$RUN/suggest.py <digest.json> [--dry-run]` |
 | `run` | the whole daily pass over `meetings/inbox/` | `bash $SKILL/scripts/run.sh daily` |
-| `fetch` | pull new Teams transcripts for my own meetings into the inbox | `$RUN/fetch_teams.py [--dry-run]` |
+| `fetch` | pull new Teams transcripts into the inbox: meetings I organized (calendar) and any meeting chat I am in (chats route) | `$RUN/fetch_teams.py [--dry-run]` |
 | `slack` | pull yesterday's DMs / group DMs / listed channels into the inbox as `kind: chat` files | `$RUN/fetch_slack.py [--dry-run] [--today YYYY-MM-DD]` |
 | `arxiv` | weekly research scan against open work items, filed in `arxiv.org` | `$RUN/arxiv_scan.py [--dry-run]` |
 | `status` | what is in inbox / digests / state, plus ledger counts | `bash $SKILL/scripts/run.sh status` |
