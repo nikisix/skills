@@ -124,6 +124,8 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
     """Download new transcripts into paths.inbox; returns the files written (none on dry run)."""
     if since is None:
         since = (datetime.fromisoformat(state.last_teams_poll) - timedelta(days=OVERLAP_DAYS)) if state.last_teams_poll else now - timedelta(days=FIRST_RUN_DAYS)
+    if since.tzinfo is None:  # `--since 2026-10-21` parses naive; read it as UTC like the Graph timestamps
+        since = since.replace(tzinfo=timezone.utc)
     written: list[Path] = []
     taken: set[str] = set()
 
@@ -150,7 +152,11 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
 
     chats_error: RuntimeError | None = None
     try:
-        for chat in list_meeting_chats():
+        chats = list_meeting_chats()
+        if chats and not any((c.get("onlineMeetingInfo") or {}).get("joinWebUrl") for c in chats):
+            print(f"teams: {len(chats)} meeting chats listed but none carries onlineMeetingInfo.joinWebUrl; "
+                  "nothing can be resolved (inspect `m365 teams chat list --type meeting -o json`)", file=sys.stderr)
+        for chat in chats:
             join_url = (chat.get("onlineMeetingInfo") or {}).get("joinWebUrl")
             touched = chat.get("lastUpdatedDateTime") or chat.get("createdDateTime")
             if not join_url or not touched or graph_datetime(touched) < since:

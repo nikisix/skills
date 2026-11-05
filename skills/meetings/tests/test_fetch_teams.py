@@ -173,3 +173,19 @@ def test_chat_listing_failure_names_the_scope_and_keeps_fetched_keys(org_dir, fa
     saved = State.load(paths.state_file)
     assert f"teams:{MEETINGS[0]['id']}:{TRANSCRIPTS[0]['id']}" in saved.fetched  # the calendar download is remembered
     assert saved.last_teams_poll is None  # the window is not advanced past the days the chats route missed
+
+
+def test_naive_since_from_the_cli_flag_is_treated_as_utc(org_dir, fake_m365, empty_calendar):
+    paths = Paths(org_dir)
+    # argparse hands fetch a naive datetime for `--since 2026-10-21`; the chats window must still work
+    files = fetch_teams.fetch(paths, State.load(paths.state_file), NOW, since=datetime(2026, 10, 21))
+    assert "2026-10-21-1202-rx-tron-discussion.vtt" in [f.name for f in files]
+
+
+def test_chats_without_join_urls_are_reported_not_silently_skipped(org_dir, fake_m365, empty_calendar, monkeypatch, capsys):
+    paths = Paths(org_dir)
+    bare = [{k: v for k, v in c.items() if k != "onlineMeetingInfo"} for c in CHATS]
+    monkeypatch.setattr(fetch_teams, "list_meeting_chats", lambda: bare)
+    assert fetch_teams.fetch(paths, State.load(paths.state_file), NOW) == []
+    err = capsys.readouterr().err
+    assert "onlineMeetingInfo.joinWebUrl" in err and str(len(bare)) in err
