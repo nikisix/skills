@@ -107,6 +107,22 @@ def test_daily_runs_done_sync_before_fetch(stub_env):
     assert r.returncode == 2  # inbox empty
 
 
+def test_daily_rewraps_the_ledger_after_landing(stub_env):
+    """A landed digest may add a row whose WHO is wider than the table had room for; the run ends
+    with `ledger.py --reformat` so every table is back within MAX_WIDTH. An empty inbox skips it."""
+    org_dir, _, _ = stub_env
+    (org_dir / "action-items.org").write_text("#+TITLE: Action items\n")
+    r, calls = run_stub(stub_env, "daily")
+    assert "ledger.py" not in [c.split()[0] for c in calls] and r.returncode == 2
+    (org_dir / "meetings" / "inbox" / "2026-11-04-x.txt").write_text("Rob: hi\n")
+    r, calls = run_stub(stub_env, "daily", normalize=0, digest=0, write_org=0, suggest=0, ledger=0)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert calls[-1] == "ledger.py --reformat" and "write_org.py" in " ".join(calls)
+    (org_dir / "meetings" / "inbox" / "2026-11-04-y.txt").write_text("Rob: hi\n")
+    r, calls = run_stub(stub_env, "daily", normalize=0, digest=0, write_org=3)  # guard tripped: nothing landed
+    assert "ledger.py" not in [c.split()[0] for c in calls] and r.returncode == 3
+
+
 def test_daily_exit_3_when_done_sync_guard_trips(stub_env):
     r, calls = run_stub(stub_env, "daily", sync_done=3)
     assert r.returncode == 3

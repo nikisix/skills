@@ -58,7 +58,7 @@ cmd_daily() {
   if ! mkdir "$LOCK" 2>/dev/null; then log "another run holds $LOCK; exiting"; exit 0; fi
   trap 'rmdir "$LOCK"' EXIT
   log "daily run start"
-  local any=0 skipped=0 f
+  local any=0 skipped=0 landed=0 f
   py sync_done.py >>"$LOG" 2>&1; rc=$?
   case $rc in
     0) log "done-sync: applied edits (see log for the undo list)";;
@@ -83,8 +83,13 @@ cmd_daily() {
     any=1
     digest_one "$f"; rc=$?
     [ $rc -eq 3 ] && skipped=1
+    [ $rc -eq 0 ] && landed=1
   done
   [ $any -eq 0 ] && log "inbox empty: nothing to do"
+  # a landed row may carry a WHO wider than its table had room for; re-wrap so every line is back within the width
+  if [ $landed -eq 1 ] && [ -f "$ORG_DIR/action-items.org" ]; then
+    if py ledger.py --reformat >>"$LOG" 2>&1; then log "ledger: re-wrapped"; else log "ledger: reformat failed, continuing"; fi
+  fi
   log "daily run end"
   [ $skipped -eq 1 ] && exit 3
   [ $any -eq 0 ] && exit 2
