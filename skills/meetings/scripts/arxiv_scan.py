@@ -1,5 +1,6 @@
 """Weekly arXiv scan: open work items -> queries (claude -p, cached) -> arxiv search -> relevance gate
-(claude -p) -> `* arXiv` section of suggested-tron-tasks.org. Seen ids live in state.arxiv_seen.
+(claude -p) -> `* arXiv` section of arxiv.org (its own file, outside the ticket suggestions). Seen ids
+live in state.arxiv_seen.
 
 Usage: arxiv_scan.py [--since YYYY-MM-DD] [--dry-run]
 """
@@ -20,7 +21,6 @@ from config import Paths, add_org_dir_arg, parse_args_or_none, paths_from_args
 from digest import SKILL_DIR, extract_json, run_claude
 from orgfile import Heading, OrgDoc, org_text
 from state import State
-from suggest import TEMPLATE
 
 QUERIES_PROMPT = SKILL_DIR / "references" / "arxiv-queries-prompt.md"
 GATE_PROMPT = SKILL_DIR / "references" / "arxiv-gate-prompt.md"
@@ -180,7 +180,7 @@ def _arxiv_section(doc: OrgDoc) -> int:
     for i, line in enumerate(doc.lines):
         if line == "* arXiv":
             return i
-    doc.lines.extend(["* arXiv", ""] if doc.lines else TEMPLATE)
+    doc.lines.extend(["* arXiv", ""])
     return _arxiv_section(doc)
 
 
@@ -199,7 +199,7 @@ def render_hit(h: Hit) -> list[str]:
 
 
 def append_hits(paths: Paths, hits: list[Hit], state: State, dry_run: bool = False) -> int:
-    doc = OrgDoc.load(paths.suggestions) if paths.suggestions.exists() else OrgDoc(list(TEMPLATE))
+    doc = OrgDoc.load(paths.arxiv) if paths.arxiv.exists() else OrgDoc([])
     sec = _arxiv_section(doc)
     n = 0
     for h in hits:
@@ -208,14 +208,14 @@ def append_hits(paths: Paths, hits: list[Hit], state: State, dry_run: bool = Fal
         lines = render_hit(h)
         at = _append_point(doc, sec)
         if dry_run:
-            print(f"== {paths.suggestions}:{at + 1}")
+            print(f"== {paths.arxiv}:{at + 1}")
             print("\n".join(lines))
         else:
             doc.insert(at, lines)
             state.arxiv_seen.add(h.paper.id)
         n += 1
     if n and not dry_run:
-        doc.save_atomic(paths.suggestions)
+        doc.save_atomic(paths.arxiv)
         state.save()
     return n
 

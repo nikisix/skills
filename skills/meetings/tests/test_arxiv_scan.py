@@ -71,11 +71,12 @@ def test_append_hits_skips_seen(org_dir):
     hits = [Hit(PAPERS[0], "Accuracy dashboard", "benchmarks extraction accuracy"), Hit(PAPERS[1], "Accuracy dashboard", "x")]
     n = arxiv_scan.append_hits(paths, hits, state)
     assert n == 1
-    lines = paths.suggestions.read_text().splitlines()
+    lines = paths.arxiv.read_text().splitlines()
     i = lines.index("** Evaluating document extraction — relevant to: Accuracy dashboard :auto:")
     assert lines[i + 1] == "   - [[https://arxiv.org/abs/2610.00001][arXiv:2610.00001]] · 2026-10-15 · benchmarks extraction accuracy"
-    assert lines.index("* Suggested") < lines.index("* arXiv") < i
-    assert "Unrelated topology paper" not in paths.suggestions.read_text()
+    assert lines[0] == "* arXiv" and 0 < i
+    assert "Unrelated topology paper" not in paths.arxiv.read_text()
+    assert not paths.suggestions.exists()
     assert State.load(paths.state_file).arxiv_seen == {"2610.00001", "2610.00002"}
 
 
@@ -84,7 +85,17 @@ def test_append_hits_dry_run(org_dir, capsys):
     state = State.load(paths.state_file)
     assert arxiv_scan.append_hits(paths, [Hit(PAPERS[0], "Accuracy dashboard", "why")], state, dry_run=True) == 1
     assert "Evaluating document extraction" in capsys.readouterr().out
-    assert not paths.suggestions.exists() and not paths.state_file.exists()
+    assert not paths.arxiv.exists() and not paths.state_file.exists()
+
+
+def test_append_hits_lands_in_an_existing_arxiv_file(org_dir):
+    paths = _org(org_dir)
+    paths.arxiv.write_text("* arXiv\n** older paper — relevant to: x :auto:\n   - [[https://arxiv.org/abs/2609.00001][arXiv:2609.00001]] · 2026-09-01 · why\n")
+    state = State.load(paths.state_file)
+    assert arxiv_scan.append_hits(paths, [Hit(PAPERS[0], "Accuracy dashboard", "why")], state) == 1
+    lines = paths.arxiv.read_text().splitlines()
+    assert lines.index("** older paper — relevant to: x :auto:") < lines.index("** Evaluating document extraction — relevant to: Accuracy dashboard :auto:")
+    assert lines.count("* arXiv") == 1
 
 
 def test_build_query_ands_terms_within_cs():

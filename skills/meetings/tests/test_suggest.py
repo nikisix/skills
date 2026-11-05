@@ -35,11 +35,10 @@ def test_creates_file_with_sections(org_dir, tmp_path):
     text = (org_dir / "suggested-tron-tasks.org").read_text()
     lines = text.splitlines()
     assert lines[0] == "* Suggested"
-    assert "* arXiv" in lines
+    assert "* arXiv" not in lines  # papers live in arxiv.org
     i = lines.index("** build a proof-diff tool for CSV exports - @Nick :auto:")
     assert lines[i + 1] == "   - source: [[file:worklog.org::*Rob 1:1][2026-10-20 Rob 1:1]]"
     assert lines[i + 2] == "   - why: Status on accuracy work; Rob wants the CSV proofs runbook by Friday."
-    assert i < lines.index("* arXiv")
 
 
 def test_appends_under_suggested_not_arxiv(org_dir, tmp_path):

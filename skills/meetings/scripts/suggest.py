@@ -19,7 +19,7 @@ from orgfile import Heading, OrgDoc, org_text
 from people import People
 
 EXIT_NOTHING = 2
-TEMPLATE = ["* Suggested", "", "* arXiv", ""]
+TEMPLATE = ["* Suggested", ""]
 _WS = re.compile(r"\s+")
 
 

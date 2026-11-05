@@ -28,7 +28,7 @@ imported from `CLAUDE.md` via `@CLAUDE-meetings.md` (only `CLAUDE.md` auto-loads
 | worklog write policy | Append meeting block directly under the day header, with greppable `(auto)` marker |
 | Digestion runtime | `claude -p` headless invoking the skill; prompts live in SKILL.md |
 | Ticket suggestions | `suggested-tron-tasks.org` (new file, outside the Jira sync) |
-| Research | arXiv scan against open work items |
+| Research | arXiv scan against open work items, filed in `arxiv.org` |
 | Collisions | **Merge under existing hand-written heading** when title/attendees fuzzy-match; else new `:auto:` block |
 | Dated follow-ups | **Under the target day's header** (find-or-create), with a backlink to the meeting |
 | Write window | Editor is nvim (no auto-reload); run **~06:30** before the file is open, same slot as org-alerts |
@@ -69,7 +69,7 @@ imported from `CLAUDE.md` via `@CLAUDE-meetings.md` (only `CLAUDE.md` auto-loads
    (meeting block) (** suggestions)          (+ state.json: processed keys)
 
    weekly: arxiv_scan.py  → tron-tasks.org open items + worklog TODOs → queries → arxiv pkg
-           → claude -p relevance gate → "* arXiv" section in suggested-tron-tasks.org
+           → claude -p relevance gate → "* arXiv" section in arxiv.org
 ```
 
 **Key principle: two-stage.** The LLM only ever emits JSON (`digests/*.json`). A deterministic Python
@@ -82,7 +82,8 @@ the model never touches `worklog.org`.
 ~/org/ringmaster/
   CLAUDE.md                      (+ `@CLAUDE-meetings.md` import line)
   CLAUDE-meetings.md             runbook for this project
-  suggested-tron-tasks.org       NEW — ticket + arXiv suggestions (sync never reads it)
+  suggested-tron-tasks.org       NEW — ticket suggestions (sync never reads it)
+  arxiv.org                      NEW — arXiv papers from the weekly scan
   worklog.org                    existing — meeting blocks appended
   meetings/                      NEW; README + people.yaml committed, the rest gitignored
     people.yaml                  alias → canonical owner map (Reeder→David, JT, Rob, Lars, …)
@@ -208,7 +209,7 @@ Dedup: skip if a normalized headline already exists in `tron-tasks.org` or `sugg
 2. `claude -p` turns each into 1–2 arXiv queries (cached in `state.json` per headline hash).
 3. `arxiv` package search, `submittedDate` window = since last run (first run: 30 days), cs.* categories.
 4. `claude -p` relevance gate: keep only "could change how we'd do this item", with a one-line why.
-5. Append to `* arXiv` in `suggested-tron-tasks.org`; seen ids in `state.json`.
+5. Append to `* arXiv` in `arxiv.org`; seen ids in `state.json`.
 
 The deepagents `arxiv_search.py` is a 30-line wrapper; reuse its query shape, not the file.
 

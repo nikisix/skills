@@ -31,7 +31,7 @@ RUN="uv run --project $SKILL python $SKILL/scripts"
 | `run` | the whole daily pass over `meetings/inbox/` | `bash $SKILL/scripts/run.sh daily` |
 | `fetch` | pull new Teams transcripts for my own meetings into the inbox | `$RUN/fetch_teams.py [--dry-run]` |
 | `slack` | pull yesterday's DMs / group DMs / listed channels into the inbox as `kind: chat` files | `$RUN/fetch_slack.py [--dry-run] [--today YYYY-MM-DD]` |
-| `arxiv` | weekly research scan against open work items | `$RUN/arxiv_scan.py [--dry-run]` |
+| `arxiv` | weekly research scan against open work items, filed in `arxiv.org` | `$RUN/arxiv_scan.py [--dry-run]` |
 | `status` | what is in inbox / digests / state, plus ledger counts | `bash $SKILL/scripts/run.sh status` |
 | `done` | propagate checked DONE cells in `action-items.org` to the worklog item and the tron task | `bash $SKILL/scripts/run.sh done [--dry-run]` |
 | `ledger` | counts per category: open / done / untracked rows; `--reformat` re-wraps every table to the 140-column layout | `bash $SKILL/scripts/run.sh ledger [--reformat]` |

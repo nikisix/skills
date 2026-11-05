@@ -25,6 +25,10 @@ class Paths:
         return self.org_dir / "suggested-tron-tasks.org"
 
     @property
+    def arxiv(self) -> Path:
+        return self.org_dir / "arxiv.org"
+
+    @property
     def tron_tasks(self) -> Path:
         return self.org_dir / "tron-tasks.org"
 
