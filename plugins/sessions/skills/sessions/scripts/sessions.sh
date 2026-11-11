@@ -6,7 +6,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PYTHON_SCRIPT="/Users/six/.claude/skills/sessions/scripts/sessions.py"
+PYTHON_SCRIPT="$SCRIPT_DIR/sessions.py"
 
 usage() {
     cat <<EOF
@@ -29,7 +29,7 @@ Commands:
   capture <proj> <name> <overview> Create session in <proj> with given overview (manual)
   help                  Show this message
 
-Config file: ~/.claude/skills/sessions/config.yaml (optional)
+Config file: <skill-dir>/config.yaml (optional)
 Sessions root: ~/sessions/<project> (default)
 
 Examples:

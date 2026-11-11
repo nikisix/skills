@@ -71,7 +71,7 @@ project follows the target.
 
 ## Configuration
 
-Config file: `~/.claude/skills/sessions/config.yaml`
+Config file: `<skill-dir>/config.yaml`
 
 ```yaml
 sessions_root: ~/sessions   # where project folders live
