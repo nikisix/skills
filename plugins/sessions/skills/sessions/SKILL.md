@@ -1,7 +1,7 @@
 ---
 name: sessions
 description: >
-  Direct session management. Invoke on /sessions <cmd> or when user says start/end/switch/scan/resume/current a session. Maps cleanly to Python script calls with minimal reasoning.
+  Direct session management. Invoke on /sessions followed by a command, or when user says start/end/switch/scan/resume/current a session. Maps cleanly to Python script calls with minimal reasoning.
 user-invocable: true
 subagent: true
 model: haiku
@@ -16,12 +16,12 @@ shared across all git worktrees for the same repo.
 
 The helper script lives at:
 ```
-/Users/six/.claude/skills/sessions/scripts/sessions.py
+<skill-dir>/scripts/sessions.py
 ```
 
 Config file (create if absent):
 ```
-~/.claude/skills/sessions/config.yaml
+<skill-dir>/config.yaml
 ```
 
 ---
@@ -59,7 +59,7 @@ unprefixed, and the active project follows the target after a successful merge.
 ### /sessions set-sessions-dir \<dir\>  (alias: /sessions set-project \<dir\>)
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py set-sessions-dir <dir>
+python3 <skill-dir>/scripts/sessions.py set-sessions-dir <dir>
 ```
 
 Create `<dir>` inside `$sessions_root` and make it the active project folder for this
@@ -72,13 +72,13 @@ Three equivalent forms — all create a numbered session file and set it as curr
 
 ```bash
 # Use auto-detected (or set-sessions-dir) project folder
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <name>
+python3 <skill-dir>/scripts/sessions.py init <name>
 
 # Explicit folder + name (two args)
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <dir> <name>
+python3 <skill-dir>/scripts/sessions.py init <dir> <name>
 
 # Slash notation (single arg with /)
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py init <dir>/<name>
+python3 <skill-dir>/scripts/sessions.py init <dir>/<name>
 ```
 
 When `<dir>` is provided, it is created if absent and set as the active project for
@@ -89,11 +89,11 @@ run `/sessions scan` separately.
 
 ```bash
 # Active project
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan
+python3 <skill-dir>/scripts/sessions.py scan
 
 # A specific project (read-only; does not change the active project)
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py scan <proj>
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py list-sessions <proj>
+python3 <skill-dir>/scripts/sessions.py scan <proj>
+python3 <skill-dir>/scripts/sessions.py list-sessions <proj>
 ```
 
 Print all session filenames and overviews. `list-sessions <proj>` is an alias for
@@ -102,7 +102,7 @@ Print all session filenames and overviews. `list-sessions <proj>` is an alias fo
 ### /sessions current
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py current
+python3 <skill-dir>/scripts/sessions.py current
 ```
 
 Print active session file path and overview.
@@ -110,8 +110,8 @@ Print active session file path and overview.
 ### /sessions end
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py end
+python3 <skill-dir>/scripts/sessions.py flush
+python3 <skill-dir>/scripts/sessions.py end
 ```
 
 Flush pending turn, then end the session. Confirm the path.
@@ -119,8 +119,8 @@ Flush pending turn, then end the session. Confirm the path.
 ### /sessions switch \<n\>
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py switch <n>
+python3 <skill-dir>/scripts/sessions.py flush
+python3 <skill-dir>/scripts/sessions.py switch <n>
 ```
 
 Where `<n>` is session number or slug fragment. Flush first, then switch. Use
@@ -129,8 +129,8 @@ Where `<n>` is session number or slug fragment. Flush first, then switch. Use
 ### /sessions resume \<n\>
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py flush
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py resume <n>
+python3 <skill-dir>/scripts/sessions.py flush
+python3 <skill-dir>/scripts/sessions.py resume <n>
 ```
 
 Where `<n>` is session number or slug fragment. Flush first, then resume. Use
@@ -139,7 +139,7 @@ Where `<n>` is session number or slug fragment. Flush first, then resume. Use
 ### /sessions detect-project
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py detect-project
+python3 <skill-dir>/scripts/sessions.py detect-project
 ```
 
 Print auto-detected project name and sessions directory.
@@ -147,10 +147,10 @@ Print auto-detected project name and sessions directory.
 ### /sessions summarize [spec]
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py summarize [spec]
+python3 <skill-dir>/scripts/sessions.py summarize [spec]
 
 # Summarize another project's active session (read-only; active project unchanged)
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py summarize <proj>/[spec]
+python3 <skill-dir>/scripts/sessions.py summarize <proj>/[spec]
 ```
 
 Emit session data scoped to `spec`, then **synthesize a git-commit-style summary** from the output.
@@ -203,7 +203,7 @@ session note.
 Get the correct path first:
 
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py pending-path
+python3 <skill-dir>/scripts/sessions.py pending-path
 ```
 
 Write the JSON to that path. The filename includes the current `CLAUDE_CODE_SESSION_ID` (e.g.
@@ -221,7 +221,13 @@ Structure:
     {"path": "relative/path/to/file.py", "action": "created|edited|deleted"}
   ],
   "decisions": [
-    "Chose X over Y because Z"
+    {
+      "question": "<the question as posed, verbatim where it was asked>",
+      "answered_by": "human|agent",
+      "choices": ["<option A>", "<option B>", "<option C>"],
+      "selected": "<the chosen option, exactly as listed in choices>",
+      "rationale": "<optional: why this choice>"
+    }
   ],
   "errors_blockers": [
     "Error: could not find file X — resolved by creating it"
@@ -231,6 +237,18 @@ Structure:
 ```
 
 - Omit empty arrays (`files_changed`, `decisions`, `errors_blockers`).
+- **Decisions are structured records, so a human can review the decision without reading the code.**
+  Record every question you posed (including AskUserQuestion) and every choice you made yourself:
+  - `question`: the question as posed to the user, or as you framed it for yourself.
+  - `answered_by`: `human` when a person answered it (including a selected option or a typed answer);
+    `agent` when no person answered and you chose the option yourself.
+  - `choices`: every option offered, in order. Leave it empty for a free-text answer.
+  - `selected`: the chosen option, exactly as it appears in `choices`. For a multi-select question,
+    pass a list. For a free-text answer, put the answer here.
+  - `rationale`: optional, one sentence.
+  - A plain string is still accepted for a one-line decision, but prefer the structured form.
+  The renderer writes each choice as a checkbox, checks and bolds the selected one, and puts
+  `answered_by` in parentheses after the question.
 - The `overview` field replaces the `## Overview` section in the session file.
   Keep it to one paragraph; write it as if explaining the session to a future
   version of yourself who needs to decide whether this session is relevant.
@@ -276,8 +294,13 @@ What you did and why — one or two sentences.
 
 ### Decisions
 
-- Chose approach X because Y
-- Decided not to refactor — out of scope
+- Question: Which approach should the refactor take? (Human)
+  - [ ] Rewrite the module
+  - [x] **Wrap the existing module**
+  - [ ] Leave it alone
+  - Rationale: Smallest change that unblocks the parser work.
+- Question: Should the cleanup pass also touch the tests? (Agent)
+  - Answer: **No, out of scope**
 
 ### Errors/Blockers
 
@@ -303,13 +326,13 @@ Captures the current Claude Code session as a session file. Steps:
 
 **1. Read the transcript:**
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py read-transcript
+python3 <skill-dir>/scripts/sessions.py read-transcript
 ```
 (Uses `$CLAUDE_CODE_SESSION_ID` automatically. Output: JSON with `title`, `turns`, `files_changed`.)
 
 **2. Get the target file path:**
 ```bash
-python3 /Users/six/.claude/skills/sessions/scripts/sessions.py capture-path <proj> <name>
+python3 <skill-dir>/scripts/sessions.py capture-path <proj> <name>
 ```
 
 **3. Synthesize and write the session file.**
@@ -342,7 +365,11 @@ file and write it to the path from step 2 using the Write tool. Use this format:
 | `path/to/file` | edited |
 
 ### Decisions
-- <any notable decisions from this turn>
+- Question: <question as posed> (Human | Agent)
+  - [ ] <option not chosen>
+  - [x] **<selected option>**
+  - Rationale: <optional>
+- <one entry per question or choice made in this turn>
 
 ---
 ...repeat for each real user↔assistant turn...
@@ -351,7 +378,14 @@ file and write it to the path from step 2 using the Write tool. Use this format:
 - Skip system-injected turns (command outputs, /model switches, interrupt notices).
 - Group each real user prompt with the assistant work that followed it as one Turn.
 - Files changed: include only turns where actual file edits happened.
-- The file is NOT set as the active session — it's a snapshot, not an ongoing session.
+
+**4. Make the captured session active.** After the Write succeeds, run the path from step 2
+(`<proj>` is the same project as step 2):
+```bash
+python3 <skill-dir>/scripts/sessions.py activate-capture <proj> <path>
+```
+This sets the captured session as the current session for its project and makes `<proj>` the
+active project, the same as `resume <proj>/<n>`. Capture is not complete until this step runs.
 
 ---
 

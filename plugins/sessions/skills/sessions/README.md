@@ -22,30 +22,30 @@ as human-readable markdown.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `/sessions init <name>` | Create a new session in the current project |
-| `/sessions init <dir> <name>` | Create a session in an explicit project folder |
-| `/sessions init <dir>/<name>` | Same via slash notation |
-| `/sessions set-sessions-dir <dir>` | Create project folder and set as active for this session |
-| `/sessions set-project <dir>` | Alias for `set-sessions-dir` |
-| `/sessions scan` | List all sessions with overviews |
-| `/sessions scan <proj>` | List sessions in a specific project (read-only) |
-| `/sessions list-sessions <proj>` | Alias for `scan <proj>` |
-| `/sessions current` | Show the active session path and overview |
-| `/sessions end` | Flush pending turn and end the session |
-| `/sessions switch <n>` | Switch active session (flush first) |
-| `/sessions switch <proj>/<n>` | Switch into another project and make it active |
-| `/sessions resume <n>` | Re-open an ended session |
-| `/sessions resume <proj>/<n>` | Resume in another project and make it active |
-| `/sessions merge <src> <tgt>` | Append all turns from src into tgt, renumber, delete src |
+| Command                                       | Description                                                                |
+|-----------------------------------------------|----------------------------------------------------------------------------|
+| `/sessions init <name>`                       | Create a new session in the current project                                |
+| `/sessions init <dir> <name>`                 | Create a session in an explicit project folder                             |
+| `/sessions init <dir>/<name>`                 | Same via slash notation                                                    |
+| `/sessions set-sessions-dir <dir>`            | Create project folder and set as active for this session                   |
+| `/sessions set-project <dir>`                 | Alias for `set-sessions-dir`                                               |
+| `/sessions scan`                              | List all sessions with overviews                                           |
+| `/sessions scan <proj>`                       | List sessions in a specific project (read-only)                            |
+| `/sessions list-sessions <proj>`              | Alias for `scan <proj>`                                                    |
+| `/sessions current`                           | Show the active session path and overview                                  |
+| `/sessions end`                               | Flush pending turn and end the session                                     |
+| `/sessions switch <n>`                        | Switch active session (flush first)                                        |
+| `/sessions switch <proj>/<n>`                 | Switch into another project and make it active                             |
+| `/sessions resume <n>`                        | Re-open an ended session                                                   |
+| `/sessions resume <proj>/<n>`                 | Resume in another project and make it active                               |
+| `/sessions merge <src> <tgt>`                 | Append all turns from src into tgt, renumber, delete src                   |
 | `/sessions merge <sproj>/<src> <tproj>/<tgt>` | Cross-project merge (move turns from the wrong project into the right one) |
-| `/sessions merge <src> <tgt> --keep` | Same but keep source file |
-| `/sessions summarize` | Print the session overview |
-| `/sessions summarize <spec>` | Synthesize a git-commit-style summary for a turn range |
-| `/sessions summarize <proj>/<spec>` | Summarize another project's active session (read-only) |
-| `/sessions capture <proj> <name>` | Snapshot the current transcript as a session file |
-| `/sessions detect-project` | Show auto-detected project name and sessions dir |
+| `/sessions merge <src> <tgt> --keep`          | Same but keep source file                                                  |
+| `/sessions summarize`                         | Print the session overview                                                 |
+| `/sessions summarize <spec>`                  | Synthesize a git-commit-style summary for a turn range                     |
+| `/sessions summarize <proj>/<spec>`           | Summarize another project's active session (read-only)                     |
+| `/sessions capture <proj> <name>`             | Snapshot the current transcript as a session file                          |
+| `/sessions detect-project`                    | Show auto-detected project name and sessions dir                           |
 
 **Active-project visibility.** Every user-facing command prints the resolved active
 project to stderr before running (`[sessions] active project: <name> → <dir>`), so you
@@ -61,17 +61,17 @@ project follows the target.
 
 ### Summarize specs
 
-| Spec | Turns selected |
-|------|----------------|
-| *(none)* | Returns `## Overview` verbatim |
-| `a-b` | Turns a through b (inclusive) |
-| `a-` | Turns a through last |
-| `-n` | Last n turns |
-| `YYYY-MM-DD` | All turns since that date |
+| Spec         | Turns selected                 |
+|--------------|--------------------------------|
+| *(none)*     | Returns `## Overview` verbatim |
+| `a-b`        | Turns a through b (inclusive)  |
+| `a-`         | Turns a through last           |
+| `-n`         | Last n turns                   |
+| `YYYY-MM-DD` | All turns since that date      |
 
 ## Configuration
 
-Config file: `~/.claude/skills/sessions/config.yaml`
+Config file: `<skill-dir>/config.yaml`
 
 ```yaml
 sessions_root: ~/sessions   # where project folders live
