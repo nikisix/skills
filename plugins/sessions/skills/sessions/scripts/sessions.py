@@ -678,7 +678,15 @@ def capture_session(project: str, name: str, overview: str) -> Path:
         f"---\n\n"
         f"*Captured: {now}*\n"
     )
+    activate_session(proj=project, session_path=session_path)
     return session_path
+
+
+def activate_session(proj: str, session_path: Path):
+    """Make a captured session the current session of its project and the active project."""
+    project_dir = project_sessions_dir(proj)
+    (project_dir / _current_session_filename()).write_text(str(session_path))
+    set_project(proj)  # the captured session's project becomes active, as with resume
 
 
 def main():
@@ -885,6 +893,19 @@ def main():
             sys.exit(1)
         path = capture_session(project, name, overview.strip())
         print(f"Captured: {path}")
+
+    elif cmd == "activate-capture":
+        if len(sys.argv) < 4:
+            print("Error: activate-capture requires project and session file path")
+            print("Usage: activate-capture <proj> <path>")
+            sys.exit(1)
+        proj = sys.argv[2]
+        path = Path(sys.argv[3]).expanduser()
+        if not path.exists():
+            print(f"Error: captured session file not found: {path}", file=sys.stderr)
+            sys.exit(1)
+        activate_session(proj=proj, session_path=path)
+        print(f"Active session: {path}")
 
     elif cmd in ("set-sessions-dir", "set-project"):
         if len(sys.argv) < 3:

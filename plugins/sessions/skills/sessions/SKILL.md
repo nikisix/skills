@@ -351,7 +351,14 @@ file and write it to the path from step 2 using the Write tool. Use this format:
 - Skip system-injected turns (command outputs, /model switches, interrupt notices).
 - Group each real user prompt with the assistant work that followed it as one Turn.
 - Files changed: include only turns where actual file edits happened.
-- The file is NOT set as the active session — it's a snapshot, not an ongoing session.
+
+**4. Make the captured session active.** After the Write succeeds, run the path from step 2
+(`<proj>` is the same project as step 2):
+```bash
+python3 <skill-dir>/scripts/sessions.py activate-capture <proj> <path>
+```
+This sets the captured session as the current session for its project and makes `<proj>` the
+active project, the same as `resume <proj>/<n>`. Capture is not complete until this step runs.
 
 ---
 
