@@ -221,7 +221,13 @@ Structure:
     {"path": "relative/path/to/file.py", "action": "created|edited|deleted"}
   ],
   "decisions": [
-    "Chose X over Y because Z"
+    {
+      "question": "<the question as posed, verbatim where it was asked>",
+      "answered_by": "human|agent",
+      "choices": ["<option A>", "<option B>", "<option C>"],
+      "selected": "<the chosen option, exactly as listed in choices>",
+      "rationale": "<optional: why this choice>"
+    }
   ],
   "errors_blockers": [
     "Error: could not find file X — resolved by creating it"
@@ -231,6 +237,18 @@ Structure:
 ```
 
 - Omit empty arrays (`files_changed`, `decisions`, `errors_blockers`).
+- **Decisions are structured records, so a human can review the decision without reading the code.**
+  Record every question you posed (including AskUserQuestion) and every choice you made yourself:
+  - `question`: the question as posed to the user, or as you framed it for yourself.
+  - `answered_by`: `human` when a person answered it (including a selected option or a typed answer);
+    `agent` when no person answered and you chose the option yourself.
+  - `choices`: every option offered, in order. Leave it empty for a free-text answer.
+  - `selected`: the chosen option, exactly as it appears in `choices`. For a multi-select question,
+    pass a list. For a free-text answer, put the answer here.
+  - `rationale`: optional, one sentence.
+  - A plain string is still accepted for a one-line decision, but prefer the structured form.
+  The renderer writes each choice as a checkbox, checks and bolds the selected one, and puts
+  `answered_by` in parentheses after the question.
 - The `overview` field replaces the `## Overview` section in the session file.
   Keep it to one paragraph; write it as if explaining the session to a future
   version of yourself who needs to decide whether this session is relevant.
@@ -276,8 +294,13 @@ What you did and why — one or two sentences.
 
 ### Decisions
 
-- Chose approach X because Y
-- Decided not to refactor — out of scope
+- Question: Which approach should the refactor take? (Human)
+  - [ ] Rewrite the module
+  - [x] **Wrap the existing module**
+  - [ ] Leave it alone
+  - Rationale: Smallest change that unblocks the parser work.
+- Question: Should the cleanup pass also touch the tests? (Agent)
+  - Answer: **No, out of scope**
 
 ### Errors/Blockers
 
@@ -342,7 +365,11 @@ file and write it to the path from step 2 using the Write tool. Use this format:
 | `path/to/file` | edited |
 
 ### Decisions
-- <any notable decisions from this turn>
+- Question: <question as posed> (Human | Agent)
+  - [ ] <option not chosen>
+  - [x] **<selected option>**
+  - Rationale: <optional>
+- <one entry per question or choice made in this turn>
 
 ---
 ...repeat for each real user↔assistant turn...
