@@ -1,0 +1,5 @@
+{
+  "name": "create-mr",
+  "version": "0.1.0",
+  "description": "Gate a branch on unit, golden, and accuracy tests, review it with code-review, and open a merge request whose description carries the decision log for review."
+}

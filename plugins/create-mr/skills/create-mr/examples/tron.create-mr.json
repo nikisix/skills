@@ -1,0 +1,9 @@
+{
+  "target_branch": "branch/dev",
+  "description_file": "create-mr--description.md",
+  "suites": {
+    "unit": "make test",
+    "golden": "make golden-replay GOLDEN_SET=data/golden/2026-11-11-ab09278",
+    "accuracy": "make eval-local CARRIER=lincoln_financial LOC=accident LABEL={label} LOCAL_EST_DIR=/Users/six/code/tron/data/runs/2026-11-11_ab09278_claude-5-5-fix-ntomasino"
+  }
+}
