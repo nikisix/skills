@@ -1,5 +1,5 @@
 {
   "name": "sessions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Direct session management: keeps a per-project log of prompts, decisions, file changes, and blockers, stored in a central sessions directory."
 }
