@@ -289,6 +289,36 @@ def scan_overviews(sessions_dir: Path) -> list:
     return results
 
 
+def format_decision_markdown(decision) -> str:
+    """Render one decision. A plain string is a legacy one-line decision; a dict is a structured
+    record of the question as posed, who answered it, the choices offered, and the selection."""
+    if isinstance(decision, str):
+        return f"- {decision}\n"
+
+    answered_by = decision.get("answered_by", "")
+    if answered_by not in ("human", "agent"):
+        print(f"[sessions] decision answered_by should be 'human' or 'agent', got {answered_by!r}", file=sys.stderr)
+
+    answered_label = answered_by.capitalize() if answered_by else "Unspecified"
+    md = f"- Question: {decision.get('question', '')} ({answered_label})\n"
+
+    choices = decision.get("choices", [])
+    selected = decision.get("selected", [])
+    selected = set(selected) if isinstance(selected, list) else ({selected} if selected else set())
+    for c in choices:
+        if c in selected:
+            md += f"  - [x] **{c}**\n"
+        else:
+            md += f"  - [ ] {c}\n"
+    free_text = [s for s in selected if s not in choices]
+    for s in free_text:
+        md += f"  - Answer: **{s}**\n"
+
+    if decision.get("rationale"):
+        md += f"  - Rationale: {decision['rationale']}\n"
+    return md
+
+
 def format_turn_markdown(turn_data: dict, turn_num: int) -> str:
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
     md = f"\n## Turn {turn_num} — {ts}\n\n"
@@ -313,7 +343,7 @@ def format_turn_markdown(turn_data: dict, turn_num: int) -> str:
     if decisions:
         md += "### Decisions\n\n"
         for d in decisions:
-            md += f"- {d}\n"
+            md += format_decision_markdown(d)
         md += "\n"
 
     errors = turn_data.get("errors_blockers", [])
