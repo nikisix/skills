@@ -687,6 +687,23 @@ def summarize_session(sessions_dir: Path, spec: str | None) -> str:
     )
 
 
+def decisions_markdown(sessions_dir: Path, spec: str | None) -> str:
+    """Emit only the Decisions blocks of the selected turns, as markdown for an MR description.
+
+    Reuses summarize's spec parsing. Turns without decisions are skipped.
+    """
+    out = summarize_session(sessions_dir, spec or "0-")
+    if not out.startswith("{"):
+        return out  # an error or a 'no turns' message from summarize
+
+    sections = []
+    for turn in json.loads(out)["turns"]:
+        m = re.search(r"### Decisions\n\n(.*?)(?=\n### |\n---|\Z)", turn["block"], re.DOTALL)
+        if m and m.group(1).strip():
+            sections.append(f"## Turn {turn['num']} — {turn['timestamp']}\n\n{m.group(1).strip()}")
+    return "\n\n".join(sections) if sections else "(no decisions recorded)"
+
+
 def capture_session(project: str, name: str, overview: str) -> Path:
     """Create a new session in a specific project with overview from stdin."""
     config = load_config()
@@ -909,6 +926,16 @@ def main():
             proj, spec = None, None
         op_dir = project_sessions_dir(proj) if proj else sessions_dir
         print(summarize_session(op_dir, spec))
+
+    elif cmd == "decisions":
+        # Optional '<proj>/<spec>' prefix (read-only view). Spec takes summarize's forms; default is all turns.
+        if len(sys.argv) > 2:
+            proj, spec = split_project(sys.argv[2])
+            spec = spec or None
+        else:
+            proj, spec = None, None
+        op_dir = project_sessions_dir(proj) if proj else sessions_dir
+        print(decisions_markdown(op_dir, spec))
 
     elif cmd == "capture":
         if len(sys.argv) < 5:
