@@ -27,11 +27,18 @@ def org(org_dir, tmp_path):
     fake = tmp_path / "claude"
     fake.write_text(FAKE_CLAUDE % str(FIX / "digest-good.json"))
     fake.chmod(0o755)
+    # run.sh fetches from Teams whenever an `m365` is on PATH; this one answers "[]" to everything so
+    # no test reaches the real tenant (the chats route would otherwise pull live transcripts in here)
+    shim = tmp_path / "bin" / "m365"
+    shim.parent.mkdir()
+    shim.write_text("#!/bin/bash\necho '[]'\n")
+    shim.chmod(0o755)
     return org_dir, fake
 
 
 def run(org_dir, fake, *args):
-    env = {**os.environ, "MEETINGS_ORG_DIR": str(org_dir), "CLAUDE_BIN": str(fake)}
+    env = {**os.environ, "MEETINGS_ORG_DIR": str(org_dir), "CLAUDE_BIN": str(fake),
+           "PATH": f"{fake.parent / 'bin'}:{os.environ['PATH']}"}
     return subprocess.run(["bash", str(SKILL / "scripts" / "run.sh"), *args], env=env, capture_output=True, text=True)
 
 

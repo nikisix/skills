@@ -145,7 +145,9 @@ def test_chats_route_warns_and_continues_when_a_meeting_cannot_be_resolved(org_d
     finally:
         MEETING_BY_JOIN_URL[MEETINGS[0]["joinWebUrl"]] = MEETINGS[0]
     assert [f.name for f in files] == ["2026-10-21-1202-rx-tron-discussion.vtt"]
-    assert "CSV Proofs Sync" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    # one summary line per run, not one 400-character line per chat: the morning log is the undo list
+    assert err.count("\n") == 1 and "1 meeting chat" in err and "CSV Proofs Sync" in err and "no meeting for" in err
 
 
 def test_chats_route_dedups_against_the_calendar_route(org_dir, fake_m365):

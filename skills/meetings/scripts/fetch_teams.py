@@ -151,6 +151,7 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
             land(meeting, t, name)
 
     chats_error: RuntimeError | None = None
+    skipped: list[tuple[str, str]] = []
     try:
         chats = list_meeting_chats()
         if chats and not any((c.get("onlineMeetingInfo") or {}).get("joinWebUrl") for c in chats):
@@ -165,7 +166,7 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
                 meeting = meeting_by_join_url(join_url)
                 transcripts = list_transcripts(meeting["id"]) if meeting else []
             except RuntimeError as exc:
-                print(f"teams: skipping chat {chat.get('topic') or chat.get('id')}: {exc}", file=sys.stderr)
+                skipped.append((chat.get("topic") or chat.get("id"), str(exc).split("failed: ", 1)[-1].strip()))
                 continue
             for t in transcripts:
                 if f"teams:{meeting['id']}:{t['id']}" in state.fetched:
@@ -173,6 +174,10 @@ def fetch(paths: Paths, state: State, now: datetime, since: datetime | None = No
                 land(meeting, t, _unique(inbox_name(meeting, when=t.get("createdDateTime")), paths.inbox, taken))
     except RuntimeError as exc:
         chats_error = exc  # keep what the calendar route landed; do not advance the window past what was missed
+    if skipped:  # one line per run: Graph refuses the lookup for meetings I only attend (see the runbook)
+        topics = ", ".join(t for t, _ in skipped)
+        print(f"teams: {len(skipped)} meeting chat{'s' if len(skipped) > 1 else ''} skipped, lookup refused: {topics} "
+              f"(first error: {skipped[0][1][:120]})", file=sys.stderr)
 
     if not dry_run:
         if chats_error is None:
