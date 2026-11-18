@@ -1,6 +1,7 @@
 {
   "target_branch": "branch/dev",
   "description_file": "create-mr--description.md",
+  "reviewers": ["agurudwar", "jsakaya", "dreeder"],
   "suites": {
     "unit": "make test",
     "golden": "make golden-replay GOLDEN_SET=data/golden/2026-11-11-ab09278",
