@@ -51,6 +51,7 @@ findings as markdown to `create-mr/create-mr--code-review.md`. If it reports no 
 ### 3. Summary and decisions
 
 - Write `create-mr/create-mr--summary.md`: a short description of what changed and why, in prose a reviewer can scan.
+- Run it through `/simplify` to condense the summary.
 - Export the decisions from the current session:
 
   ```bash
